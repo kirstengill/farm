@@ -1,0 +1,26 @@
+npm notice run feldwert-capital@1.0.0 dev
+npm notice run vite
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m613[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+[2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+[2m[32m  ➜[39m[22m[2m  press [22m[1mh + enter[22m[2m to show help[22m
+[2m1:13:13 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/C:\Users\antho\Desktop\farm\src\pages\guards.tsx, /src/index.css[22m
+[2m1:14:45 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/C:\Users\antho\Desktop\farm\src\components\Logo.tsx, /src/index.css[22m
+[2m1:14:57 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/C:\Users\antho\Desktop\farm\src\components\Logo.tsx, /src/index.css[22m
+[2m1:18:28 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/C:\Users\antho\Desktop\farm\src\pages\Landing.tsx, /src/index.css[22m
+[2m1:20:30 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/C:\Users\antho\Desktop\farm\src\components\FarmImage.tsx, /src/index.css[22m
+[2m1:20:46 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/C:\Users\antho\Desktop\farm\src\components\FarmImage.tsx, /src/index.css[22m
+[2m1:20:46 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/C:\Users\antho\Desktop\farm\src\pages\Landing.tsx, /src/index.css[22m
+[2m1:23:50 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/C:\Users\antho\Desktop\farm\src\pages\Landing.tsx, /src/index.css[22m
+[2m1:23:50 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/C:\Users\antho\Desktop\farm\src\pages\AuthLayout.tsx, /src/index.css[22m
+[2m1:26:37 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/C:\Users\antho\Desktop\farm\src\pages\Marketplace.tsx, /src/index.css[22m
+[2m1:26:58 AM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mtsconfig.tsbuildinfo[22m
+[2m1:32:34 AM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msupabase/migrations/20260912212627_farm_schema.sql[22m
+[2m1:33:14 AM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mtsconfig.tsbuildinfo[22m
+[2m1:34:52 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/C:\Users\antho\Desktop\farm\src\pages\Admin.tsx, /src/index.css[22m
+[2m1:34:52 AM[22m [36m[1m[vite][22m[39m changed tsconfig file detected: C:\Users\antho\Desktop\farm\tsconfig.json - Clearing cache and forcing full-reload to ensure TypeScript is compiled with updated config values.
+[2m1:34:52 AM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mtsconfig.json[22m
+[2m1:34:52 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/C:\Users\antho\Desktop\farm\src\pages\Dashboard.tsx, /src/index.css[22m
+[2m1:34:52 AM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mpackage.json[22m
