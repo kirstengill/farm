@@ -1,3 +1,4 @@
+import { farmArtFor } from './farmArt'
 import type {
   FarmProject,
   Investment,
@@ -112,8 +113,7 @@ const DEFAULT_FARMS: FarmProject[] = [
     description:
       'Pasture-raised organic Angus cattle program with guaranteed regional processing off-take contracts and biosecurity tracking.',
     location: 'Allgäu, Bavaria, Germany',
-    image_url:
-      'https://images.unsplash.com/photo-1570042225831-d98fa7577f1e?auto=format&fit=crop&w=1200&q=80',
+    image_url: farmArtFor('cattle'),
     status: 'active',
     min_amount: 250000,
     max_amount: 25000000,
@@ -131,8 +131,7 @@ const DEFAULT_FARMS: FarmProject[] = [
     description:
       'State-of-the-art pelleting and nutrient-dense silage production facility supplying commercial livestock clusters across Western Germany.',
     location: 'North Rhine-Westphalia, Germany',
-    image_url:
-      'https://images.unsplash.com/photo-1574943320219-553eb213f72d?auto=format&fit=crop&w=1200&q=80',
+    image_url: farmArtFor('feeds'),
     status: 'active',
     min_amount: 100000,
     max_amount: 15000000,
@@ -150,8 +149,7 @@ const DEFAULT_FARMS: FarmProject[] = [
     description:
       'Automated climate-controlled poultry housing operating fast 60-day turnover cycles with pre-contracted supermarket distribution.',
     location: 'Saxony, Germany',
-    image_url:
-      'https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?auto=format&fit=crop&w=1200&q=80',
+    image_url: farmArtFor('broilers'),
     status: 'active',
     min_amount: 50000,
     max_amount: 10000000,
@@ -169,8 +167,7 @@ const DEFAULT_FARMS: FarmProject[] = [
     description:
       'Dual-purpose high-yield Simmental herd on alpine pastures delivering stable monthly milk yield dividends and livestock valuation growth.',
     location: 'Upper Bavaria, Germany',
-    image_url:
-      'https://images.unsplash.com/photo-1546445317-29f4545e9d53?auto=format&fit=crop&w=1200&q=80',
+    image_url: farmArtFor('cattle'),
     status: 'active',
     min_amount: 200000,
     max_amount: 20000000,
@@ -188,8 +185,7 @@ const DEFAULT_FARMS: FarmProject[] = [
     description:
       'Commercial dehydrated alfalfa and high-protein grain processing plant with multi-season harvest storage and direct farm delivery logistics.',
     location: 'Danube Valley, Germany',
-    image_url:
-      'https://images.unsplash.com/photo-1586771107445-d3ca888129ff?auto=format&fit=crop&w=1200&q=80',
+    image_url: farmArtFor('feeds'),
     status: 'active',
     min_amount: 100000,
     max_amount: 18000000,
@@ -207,8 +203,7 @@ const DEFAULT_FARMS: FarmProject[] = [
     description:
       'Pasture-rotated organic broiler chicken enterprise producing certified free-range poultry for metropolitan retail distribution.',
     location: 'Brandenburg, Germany',
-    image_url:
-      'https://images.unsplash.com/photo-1516467508483-a7212febe31a?auto=format&fit=crop&w=1200&q=80',
+    image_url: farmArtFor('broilers'),
     status: 'active',
     min_amount: 75000,
     max_amount: 12000000,
@@ -226,7 +221,7 @@ const DEFAULT_FARMS: FarmProject[] = [
     description:
       'A modern bio-secure and free-range pig farming operation in the Bavarian countryside with pre-contracted premium pork supply agreements.',
     location: 'Lower Bavaria, Germany',
-    image_url: '/images/realistic_farm_pig.jpg',
+    image_url: farmArtFor('pig'),
     status: 'active',
     min_amount: 100000,
     max_amount: 15000000,
@@ -285,7 +280,7 @@ function getInitialState(): DBState {
         password: 'password123',
         user_metadata: {
           username: 'demo',
-          full_name: 'Mugenyi Anthony',
+          full_name: 'Demo Investor',
           phone: '+256 775 432109',
         },
       },
@@ -307,7 +302,7 @@ function getInitialState(): DBState {
       {
         id: demoId,
         username: 'demo',
-        full_name: 'Mugenyi Anthony',
+        full_name: 'Demo Investor',
         phone: '+256 775 432109',
         role: 'user',
         status: 'active',
@@ -426,6 +421,22 @@ function loadState(): DBState {
       return init
     }
     const parsed: DBState = JSON.parse(raw)
+
+    for (const profile of parsed.profiles || []) {
+      if (typeof profile.full_name === 'string' && /anthony|mugenyi/i.test(profile.full_name)) {
+        profile.full_name = 'Demo Investor'
+      }
+    }
+    for (const user of parsed.users || []) {
+      const fullName = user.user_metadata?.full_name
+      if (typeof fullName === 'string' && /anthony|mugenyi/i.test(fullName)) {
+        user.user_metadata = {
+          ...(user.user_metadata || {}),
+          full_name: 'Demo Investor',
+        }
+      }
+    }
+
     // Ensure platform_settings has all required keys
     parsed.platform_settings = parsed.platform_settings || []
     const requiredKeys: Record<string, any> = {
@@ -448,9 +459,16 @@ function loadState(): DBState {
     if (modified) {
       saveState(parsed)
     }
-    // Validate if videos collection exists and is seeded
+    // Validate core collections are present so the marketplace and videos remain populated after a browser reset
+    if (!parsed.farm_projects || parsed.farm_projects.length === 0) {
+      parsed.farm_projects = [...DEFAULT_FARMS]
+      modified = true
+    }
     if (!parsed.videos || parsed.videos.length === 0) {
       parsed.videos = [...DEFAULT_VIDEOS]
+      modified = true
+    }
+    if (modified) {
       saveState(parsed)
     }
     return parsed
@@ -801,20 +819,24 @@ export const mockSupabase = {
     async signInWithPassword({ email, password }: { email: string; password?: string }) {
       const state = loadState()
       const normalized = email.toLowerCase().trim()
-      let user = state.users.find(
+      const user = state.users.find(
         (u) =>
           u.email.toLowerCase() === normalized ||
           u.user_metadata?.username?.toLowerCase() === normalized
       )
 
       if (!user) {
-        const username = normalized.includes('@') ? normalized.split('@')[0] : normalized
-        const res = await mockSupabase.auth.signUp({
-          email: `${username}@users.feldwert.de`,
-          password: password || 'defaultPass123',
-          options: { data: { username, full_name: username } },
-        })
-        return res
+        return {
+          data: { user: null, session: null },
+          error: { message: 'Invalid login credentials' },
+        }
+      }
+
+      if (user.password !== password) {
+        return {
+          data: { user: null, session: null },
+          error: { message: 'Invalid login credentials' },
+        }
       }
 
       saveStoredSessionUser(user)

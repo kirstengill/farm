@@ -78,6 +78,14 @@ export default function Admin() {
   const [actionBusy, setActionBusy] = useState(false)
   const [searchUser, setSearchUser] = useState('')
   const [filterReqType, setFilterReqType] = useState<'all' | 'deposit' | 'withdrawal'>('all')
+  const [editingUser, setEditingUser] = useState<UserRow | null>(null)
+  const [userDraft, setUserDraft] = useState<{
+    full_name: string
+    phone: string
+    role: 'user' | 'admin'
+    status: 'active' | 'blocked'
+    referral_code: string
+  } | null>(null)
 
   const loadData = async () => {
     try {
@@ -225,6 +233,50 @@ export default function Admin() {
     setMsg({ type: 'success', text: `Farm ${farm.name} removed.` })
     await loadData()
     setTimeout(() => setMsg(null), 3000)
+  }
+
+  const openUserEditor = (u: UserRow) => {
+    setEditingUser(u)
+    setUserDraft({
+      full_name: u.full_name || u.username,
+      phone: u.phone || '',
+      role: u.role,
+      status: u.status,
+      referral_code: u.referral_code || '',
+    })
+  }
+
+  const saveUserEdits = async () => {
+    if (!editingUser || !userDraft) return
+
+    const trimmedName = userDraft.full_name.trim()
+    const trimmedPhone = userDraft.phone.trim()
+    const trimmedReferral = userDraft.referral_code.trim()
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: trimmedName || editingUser.username,
+          phone: trimmedPhone || null,
+          role: userDraft.role,
+          status: userDraft.status,
+          referral_code: trimmedReferral || editingUser.referral_code,
+          is_admin: userDraft.role === 'admin',
+        })
+        .eq('id', editingUser.id)
+
+      if (error) throw error
+
+      setMsg({ type: 'success', text: `Profile for @${editingUser.username} updated successfully.` })
+      setEditingUser(null)
+      setUserDraft(null)
+      await loadData()
+      setTimeout(() => setMsg(null), 3000)
+    } catch (err: any) {
+      setMsg({ type: 'error', text: err?.message || 'Failed to update user profile.' })
+      setTimeout(() => setMsg(null), 4000)
+    }
   }
 
   // Toggle user block
@@ -873,22 +925,149 @@ export default function Admin() {
                         </span>
                       </td>
                       <td className="p-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => toggleBlockUser(u)}
-                          className={`rounded-xl px-3 py-1 text-xs font-semibold ${
-                            u.status === 'active'
-                              ? 'bg-red-950/40 text-red-300 border border-red-500/30 hover:bg-red-900/50'
-                              : 'bg-emerald-950/40 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-900/50'
-                          }`}
-                        >
-                          {u.status === 'active' ? 'Freeze' : 'Unfreeze'}
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openUserEditor(u)}
+                            className="rounded-xl border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-stone-200 hover:bg-white/10"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleBlockUser(u)}
+                            className={`rounded-xl px-3 py-1 text-xs font-semibold ${
+                              u.status === 'active'
+                                ? 'bg-red-950/40 text-red-300 border border-red-500/30 hover:bg-red-900/50'
+                                : 'bg-emerald-950/40 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-900/50'
+                            }`}
+                          >
+                            {u.status === 'active' ? 'Freeze' : 'Unfreeze'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {editingUser && userDraft && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111713]/80 p-4">
+            <div className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#141b18] p-6 shadow-2xl">
+              <div className="mb-5 flex items-center justify-between gap-3 border-b border-white/10 pb-4">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-gold-400">User editor</p>
+                  <h3 className="font-display text-2xl font-bold text-white">Edit Investor Profile</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingUser(null)
+                    setUserDraft(null)
+                  }}
+                  className="rounded-full border border-white/10 p-2 text-stone-300 hover:bg-white/5"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
+                    Full name
+                  </label>
+                  <input
+                    value={userDraft.full_name}
+                    onChange={(e) => setUserDraft({ ...userDraft, full_name: e.target.value })}
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-gold-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
+                    Phone
+                  </label>
+                  <input
+                    value={userDraft.phone}
+                    onChange={(e) => setUserDraft({ ...userDraft, phone: e.target.value })}
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-gold-500"
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
+                      Role
+                    </label>
+                    <select
+                      value={userDraft.role}
+                      onChange={(e) =>
+                        setUserDraft({
+                          ...userDraft,
+                          role: e.target.value as 'user' | 'admin',
+                        })
+                      }
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-gold-500"
+                    >
+                      <option value="user">User</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
+                      Status
+                    </label>
+                    <select
+                      value={userDraft.status}
+                      onChange={(e) =>
+                        setUserDraft({
+                          ...userDraft,
+                          status: e.target.value as 'active' | 'blocked',
+                        })
+                      }
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-gold-500"
+                    >
+                      <option value="active">Active</option>
+                      <option value="blocked">Blocked</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
+                    Referral code
+                  </label>
+                  <input
+                    value={userDraft.referral_code}
+                    onChange={(e) => setUserDraft({ ...userDraft, referral_code: e.target.value })}
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-gold-500"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingUser(null)
+                    setUserDraft(null)
+                  }}
+                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-stone-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={saveUserEdits}
+                  className="rounded-xl bg-gold-500 px-4 py-2 text-sm font-bold text-forest-950"
+                >
+                  Save changes
+                </button>
+              </div>
             </div>
           </div>
         )}

@@ -83,13 +83,6 @@ export default function SignIn() {
     }
   }
 
-  // Helper to fill demo account for quick inspection
-  const fillDemo = (demoUser: string) => {
-    setUsername(demoUser)
-    setPassword('password123')
-    setError('')
-  }
-
   return (
     <AuthLayout
       title="Welcome back"
@@ -273,34 +266,6 @@ export default function SignIn() {
             )}
           </button>
         </form>
-
-        {/* Demo Fast Login Quick Selector */}
-        <div className="mt-6 pt-5 border-t border-stone-100">
-          <div className="flex items-center justify-between text-[11px] text-ink-500 mb-2.5">
-            <span className="font-semibold uppercase tracking-wider">Quick Demo Access</span>
-            <span className="text-stone-400">Preview Credentials</span>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              id="btn-quick-demo-user"
-              onClick={() => fillDemo('demo')}
-              className="flex items-center justify-center gap-1.5 rounded-xl border border-stone-200/80 bg-stone-50/70 hover:bg-forest-50/60 hover:border-forest-200 py-2 px-3 text-xs font-semibold text-stone-700 hover:text-forest-900 transition-colors"
-            >
-              <User className="h-3.5 w-3.5 text-forest-700" />
-              <span>Investor Demo</span>
-            </button>
-            <button
-              type="button"
-              id="btn-quick-demo-admin"
-              onClick={() => fillDemo('admin')}
-              className="flex items-center justify-center gap-1.5 rounded-xl border border-stone-200/80 bg-stone-50/70 hover:bg-gold-50/60 hover:border-gold-200 py-2 px-3 text-xs font-semibold text-stone-700 hover:text-forest-900 transition-colors"
-            >
-              <ShieldCheck className="h-3.5 w-3.5 text-gold-600" />
-              <span>Admin Demo</span>
-            </button>
-          </div>
-        </div>
 
         {/* Footer Navigation Link */}
         <div className="mt-6 text-center text-sm text-ink-600">

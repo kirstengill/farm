@@ -91,7 +91,7 @@ export default function Dashboard() {
     if (!user) return
     try {
       const [w, inv, t, n, f, s, profilesRes] = await Promise.all([
-        supabase.from('wallets').select('*').eq('user_id', user.id).single(),
+        supabase.from('wallets').select('*').eq('user_id', user.id).maybeSingle(),
         supabase
           .from('investments')
           .select('*')

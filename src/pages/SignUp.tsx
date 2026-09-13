@@ -188,7 +188,7 @@ export default function SignUp() {
                   autoComplete="name"
                   value={formData.fullName}
                   onChange={(e) => updateField('fullName', e.target.value)}
-                  placeholder="e.g. Anthony Mugenyi"
+                  placeholder="e.g. Jane Doe"
                   required
                   className="w-full pl-10 pr-4 py-3 rounded-xl border border-stone-200 bg-[#fafbfa] text-stone-900 placeholder:text-stone-400 focus:bg-white focus:outline-none focus:border-forest-700 focus:ring-4 focus:ring-forest-700/10 transition-all text-base sm:text-sm"
                 />
@@ -214,7 +214,7 @@ export default function SignUp() {
                     autoComplete="username"
                     value={formData.username}
                     onChange={(e) => updateField('username', e.target.value)}
-                    placeholder="e.g. mugenyi_a"
+                    placeholder="e.g. investor_01"
                     required
                     className="w-full pl-9 pr-4 py-3 rounded-xl border border-stone-200 bg-[#fafbfa] text-stone-900 placeholder:text-stone-400 focus:bg-white focus:outline-none focus:border-forest-700 focus:ring-4 focus:ring-forest-700/10 transition-all text-base sm:text-sm"
                   />

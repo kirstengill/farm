@@ -11,21 +11,27 @@ const hasCredentials = Boolean(
     !supabaseUrl.includes('your-project')
 )
 
-if (!hasCredentials) {
+const isLocalPreview =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+
+const shouldUseMock = !hasCredentials || isLocalPreview
+
+if (shouldUseMock) {
   console.info(
-    '[Feldwert Capital] Supabase environment variables not configured. Using persistent in-memory/localStorage mock mode for preview.'
+    '[Feldwert Capital] Using the local preview mock backend for this environment.'
   )
 }
 
-export const supabase = hasCredentials
-  ? createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = shouldUseMock
+  ? (mockSupabase as any)
+  : createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: false,
       },
     })
-  : (mockSupabase as any)
 
-export const isUsingMock = !hasCredentials
+export const isUsingMock = shouldUseMock
 
