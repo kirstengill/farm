@@ -26,17 +26,19 @@ import {
   Sprout,
   TrendingUp,
   User,
+  Users,
   Wallet as WalletIcon,
   X,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../state/auth'
 import { formatUGX, formatDate, formatRelativeDays } from '../lib/format'
-import type { Wallet, Investment, Transaction, AppNotification, FarmProject, PlatformSettings } from '../lib/types'
+import type { Wallet, Investment, Transaction, AppNotification, FarmProject, PlatformSettings, Profile } from '../lib/types'
 import AppLayout from '../components/AppLayout'
 import FarmImage from '../components/FarmImage'
 import { farmArtFor } from '../lib/farmArt'
 import InvestmentScheduleTimeline from '../components/InvestmentScheduleTimeline'
+import { getPlatformSettings } from '../lib/settings'
 
 type Tab = 'overview' | 'farms' | 'wallet' | 'referrals' | 'settings'
 
@@ -66,6 +68,9 @@ export default function Dashboard() {
   const [busy, setBusy] = useState(false)
   const [selectedInvForTimeline, setSelectedInvForTimeline] = useState<Investment | null>(null)
   const [copiedCode, setCopiedCode] = useState(false)
+  const [copiedLink, setCopiedLink] = useState(false)
+  const [shareToast, setShareToast] = useState('')
+  const [referredUsers, setReferredUsers] = useState<Profile[]>([])
 
   // Keep query param in sync
   useEffect(() => {
@@ -85,7 +90,7 @@ export default function Dashboard() {
   const loadDashboardData = async () => {
     if (!user) return
     try {
-      const [w, inv, t, n, f, s] = await Promise.all([
+      const [w, inv, t, n, f, s, profilesRes] = await Promise.all([
         supabase.from('wallets').select('*').eq('user_id', user.id).single(),
         supabase
           .from('investments')
@@ -97,7 +102,7 @@ export default function Dashboard() {
           .select('*')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
-          .limit(20),
+          .limit(50),
         supabase
           .from('notifications')
           .select('*')
@@ -105,7 +110,8 @@ export default function Dashboard() {
           .order('created_at', { ascending: false })
           .limit(10),
         supabase.from('farm_projects').select('*'),
-        supabase.from('platform_settings').select('*').limit(1).maybeSingle(),
+        getPlatformSettings(),
+        supabase.from('profiles').select('*'),
       ])
 
       setWallet((w.data as Wallet) ?? null)
@@ -113,8 +119,20 @@ export default function Dashboard() {
       setTxs((t.data as Transaction[]) ?? [])
       setNotifs((n.data as AppNotification[]) ?? [])
       setFarms((f.data as FarmProject[]) ?? [])
-      if (s.data) {
-        setPlatformSettings(s.data as PlatformSettings)
+      if (s) {
+        setPlatformSettings(s as PlatformSettings)
+      }
+      if (profilesRes.data) {
+        const myCode = profile?.referral_code
+        const list = (profilesRes.data as Profile[]).filter(
+          (p) =>
+            p.id !== user.id &&
+            p.referred_by &&
+            (p.referred_by === myCode ||
+              p.referred_by === user.id ||
+              p.referred_by === profile?.username)
+        )
+        setReferredUsers(list)
       }
     } catch (e) {
       console.error('Error loading dashboard data:', e)
@@ -125,18 +143,43 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadDashboardData()
+
+    // Listen for platform settings updates across admin and investor interfaces
+    const handleSettingsUpdate = () => {
+      getPlatformSettings().then((fresh) => {
+        setPlatformSettings(fresh)
+      })
+    }
+    window.addEventListener('platform-settings-updated', handleSettingsUpdate)
+    return () => window.removeEventListener('platform-settings-updated', handleSettingsUpdate)
   }, [user])
 
   useEffect(() => {
     if (profile?.phone && !phoneContact) {
       setPhoneContact(profile.phone)
     }
-  }, [profile])
+    if (profile && user) {
+      supabase.from('profiles').select('*').then((res: any) => {
+        if (res.data) {
+          const myCode = profile.referral_code
+          const list = (res.data as Profile[]).filter(
+            (p) =>
+              p.id !== user.id &&
+              p.referred_by &&
+              (p.referred_by === myCode ||
+                p.referred_by === user.id ||
+                p.referred_by === profile.username)
+          )
+          setReferredUsers(list)
+        }
+      })
+    }
+  }, [profile, user])
 
-  // Compute withdrawal lock status
+  // Compute withdrawal lock status from backend settings & user state
   const withdrawalLockInfo = (() => {
     const now = new Date()
-    // 1. User-specific hold
+    // 1. User-specific custom lock hold
     if (profile?.withdrawal_locked_until) {
       const userLockDate = new Date(profile.withdrawal_locked_until)
       if (userLockDate > now) {
@@ -147,15 +190,31 @@ export default function Dashboard() {
         }
       }
     }
-    // 2. Platform-wide new account lock
-    if (platformSettings?.withdrawal_lock_enabled && profile?.created_at) {
-      const lockDays = platformSettings.withdrawal_lock_days ?? 7
-      const unlockDate = new Date(new Date(profile.created_at).getTime() + lockDays * 86400000)
+
+    // 2. Platform-wide withdrawal lock
+    const lockDays = platformSettings?.withdrawal_lock_days ?? 7
+    const lockEnabled = platformSettings?.withdrawal_lock_enabled ?? (lockDays > 0)
+
+    if (lockEnabled && lockDays > 0) {
+      // Base lock period on latest approved deposit, or account registration
+      const approvedDeposits = txs.filter(
+        (t) => t.type === 'deposit' && (t.status === 'approved' || t.status === 'completed')
+      )
+      const latestDepositTime =
+        approvedDeposits.length > 0
+          ? Math.max(...approvedDeposits.map((d) => new Date(d.created_at).getTime()))
+          : null
+
+      const anchorTime =
+        latestDepositTime ||
+        (profile ? new Date(profile.created_at).getTime() : Date.now())
+      const unlockDate = new Date(anchorTime + lockDays * 86400000)
+
       if (unlockDate > now) {
         return {
           isLocked: true,
           lockedUntil: unlockDate,
-          reason: `Initial security lock period active until ${formatDate(unlockDate.toISOString())} (${lockDays} days after registration).`,
+          reason: `Withdrawals are currently locked. Withdrawals will become available after ${lockDays} days (on ${formatDate(unlockDate.toISOString())}).`,
         }
       }
     }
@@ -176,8 +235,18 @@ export default function Dashboard() {
     }
 
     if (modal === 'withdraw') {
+      const minW = platformSettings?.min_withdrawal ?? 10000
+      if (amt < minW) {
+        setErr(`Minimum withdrawal is UGX ${minW.toLocaleString('en-US')}.`)
+        return
+      }
       if (withdrawalLockInfo.isLocked) {
-        setErr(withdrawalLockInfo.reason || 'Withdrawals are currently locked for this account.')
+        setErr(
+          withdrawalLockInfo.reason ||
+            `Withdrawals are currently locked. Withdrawals will become available after ${
+              platformSettings?.withdrawal_lock_days ?? 7
+            } days.`
+        )
         return
       }
       if (amt > (wallet?.balance ?? 0)) {
@@ -222,12 +291,60 @@ export default function Dashboard() {
     }
   }
 
-  const handleCopyCode = () => {
-    if (profile?.referral_code) {
-      navigator.clipboard.writeText(profile.referral_code)
-      setCopiedCode(true)
-      setTimeout(() => setCopiedCode(false), 2500)
+  const referralCode = profile?.referral_code || ''
+  const referralLink =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/signup?ref=${referralCode}`
+      : `https://feldwert.de/signup?ref=${referralCode}`
+
+  const handleShareReferral = async () => {
+    const shareData = {
+      title: 'Feldwert Capital - Agricultural Investments',
+      text: `Join me on Feldwert Capital to invest in verified agricultural opportunities (cattle breeding, feed production, broiler units) with competitive yields. Use my referral invitation link:`,
+      url: referralLink,
     }
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share(shareData)
+        setShareToast('Invitation shared successfully!')
+        setTimeout(() => setShareToast(''), 3500)
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          handleCopyLink()
+        }
+      }
+    } else {
+      handleCopyLink()
+    }
+  }
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(referralLink)
+      setCopiedLink(true)
+      setShareToast('Referral link copied to clipboard!')
+      setTimeout(() => {
+        setCopiedLink(false)
+        setShareToast('')
+      }, 3500)
+    } catch {
+      setShareToast(`Referral Link: ${referralLink}`)
+      setTimeout(() => setShareToast(''), 4500)
+    }
+  }
+
+  const handleCopyCode = async () => {
+    if (!referralCode) return
+    try {
+      await navigator.clipboard.writeText(referralCode)
+      setCopiedCode(true)
+      setShareToast('Referral code copied to clipboard!')
+      setTimeout(() => {
+        setCopiedCode(false)
+        setShareToast('')
+      }, 3500)
+    } catch {}
   }
 
   const activeInvestments = investments.filter(
@@ -784,49 +901,66 @@ export default function Dashboard() {
         {/* ================= TAB 3: WALLET & TRANSACTIONS ================= */}
         {tab === 'wallet' && (
           <div className="space-y-8 animate-fade">
-            {/* Wallet Balance Hero */}
+            {/* Dedicated Wallet Card */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="rounded-3xl bg-forest-900 text-white p-7 shadow-md flex flex-col justify-between space-y-6">
+              <div className="rounded-3xl bg-forest-900 text-white p-7 sm:p-8 shadow-sm flex flex-col justify-between space-y-6">
                 <div>
                   <div className="flex items-center justify-between text-xs text-forest-200">
-                    <span>Available Liquidity</span>
-                    <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
-                      UGX / Mobile Money
+                    <span className="font-semibold uppercase tracking-wider text-[11px] text-forest-300">
+                      Available Balance
+                    </span>
+                    <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[10px] font-bold text-emerald-300 border border-emerald-500/30">
+                      Live Ledger · UGX
                     </span>
                   </div>
-                  <div className="mt-2 font-display text-4xl font-bold tracking-tight text-white">
+                  <div className="mt-3 font-display text-4xl sm:text-5xl font-bold tracking-tight text-white">
                     {formatUGX(availableBalance)}
                   </div>
-                  <p className="mt-1 text-xs text-stone-300">
-                    Deposited funds are securely escrowed for Ugandan farm project allocations.
+                  <p className="mt-2 text-xs text-forest-200 leading-relaxed">
+                    Direct balance sourced from your secure Supabase wallet account. Ready for farm investment allocations or withdrawal.
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 pt-4 border-t border-forest-800">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setModal('deposit')
-                      setErr('')
-                      setMsg('')
-                    }}
-                    className="flex items-center justify-center gap-1.5 rounded-xl bg-forest-700 hover:bg-forest-600 py-3 text-xs font-bold text-white transition-colors"
-                  >
-                    <Plus className="h-4 w-4 text-gold-400" />
-                    <span>Deposit Funds</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setModal('withdraw')
-                      setErr('')
-                      setMsg('')
-                    }}
-                    className="flex items-center justify-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/20 py-3 text-xs font-bold text-stone-200 transition-colors"
-                  >
-                    <ArrowUpRight className="h-4 w-4" />
-                    <span>Request Withdrawal</span>
-                  </button>
+                <div className="space-y-4 pt-4 border-t border-forest-800">
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      id="btn-wallet-deposit"
+                      type="button"
+                      onClick={() => {
+                        setModal('deposit')
+                        setErr('')
+                        setMsg('')
+                      }}
+                      className="flex items-center justify-center gap-1.5 rounded-xl bg-forest-700 hover:bg-forest-600 py-3 text-xs font-bold text-white transition-colors shadow-xs"
+                    >
+                      <Plus className="h-4 w-4 text-gold-400" />
+                      <span>Deposit</span>
+                    </button>
+                    <button
+                      id="btn-wallet-withdraw"
+                      type="button"
+                      onClick={() => {
+                        setModal('withdraw')
+                        setErr('')
+                        setMsg('')
+                      }}
+                      className="flex items-center justify-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/20 py-3 text-xs font-bold text-stone-200 transition-colors"
+                    >
+                      <ArrowUpRight className="h-4 w-4" />
+                      <span>Withdraw</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-forest-800/60 text-[11px]">
+                    <div>
+                      <span className="text-forest-400">Total Invested:</span>
+                      <p className="font-bold text-white mt-0.5">{formatUGX(totalInvested)}</p>
+                    </div>
+                    <div>
+                      <span className="text-forest-400">Total Returns:</span>
+                      <p className="font-bold text-emerald-300 mt-0.5">+{formatUGX(totalEarnings)}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -840,11 +974,11 @@ export default function Dashboard() {
                     </h3>
                   </div>
                   <span className="rounded-full bg-emerald-50 text-emerald-800 text-[10px] font-bold px-2.5 py-0.5 border border-emerald-200">
-                    Instant & Automated
+                    Automated & Instant
                   </span>
                 </div>
                 <p className="text-xs text-ink-600 leading-relaxed">
-                  Deposit directly via MTN Mobile Money or Airtel Money Uganda. Use your personal investor code as the transaction reference.
+                  Deposit funds directly using MTN Mobile Money or Airtel Money Uganda. Always provide your personal investor reference so the system matches your account balance.
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-2xl bg-stone-50 p-4 text-xs border border-stone-200">
@@ -861,20 +995,45 @@ export default function Dashboard() {
                   <div>
                     <span className="text-ink-500 font-medium">Personal Reference</span>
                     <p className="font-bold text-forest-800 font-mono mt-0.5">{profile?.username}-DEP</p>
-                    <p className="text-[10px] text-ink-500 mt-0.5">Auto-matches wallet</p>
+                    <p className="text-[10px] text-ink-500 mt-0.5">Auto-credits wallet</p>
                   </div>
+                </div>
+
+                <div className="rounded-2xl border border-stone-200 p-4 bg-stone-50/50 flex items-center justify-between gap-4">
+                  <div className="text-xs">
+                    <span className="font-bold text-forest-950 block">Withdrawal Settlement Policy</span>
+                    <span className="text-ink-500 text-[11px]">
+                      Withdrawals are settled directly to the phone number registered on your profile.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModal('withdraw')
+                      setErr('')
+                      setMsg('')
+                    }}
+                    className="shrink-0 rounded-xl border border-forest-800 text-forest-800 hover:bg-forest-800 hover:text-white px-3.5 py-1.5 text-xs font-bold transition-colors"
+                  >
+                    Request Payout
+                  </button>
                 </div>
               </div>
             </div>
 
             {/* Complete Transaction Table */}
-            <div className="rounded-3xl border border-stone-200 bg-white p-6 shadow-xs space-y-4">
-              <h3 className="font-display text-lg font-bold text-forest-950">
-                Transaction History
-              </h3>
+            <div className="rounded-3xl border border-stone-200 bg-white p-6 sm:p-7 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-display text-lg font-bold text-forest-950">
+                  Transaction History
+                </h3>
+                <span className="text-xs text-ink-500 font-mono">
+                  {txs.length} total records
+                </span>
+              </div>
 
               {txs.length === 0 ? (
-                <p className="text-xs text-ink-500 py-6 text-center">No transaction records found.</p>
+                <p className="text-xs text-ink-500 py-6 text-center">No transaction records found in your Supabase account.</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
@@ -924,51 +1083,283 @@ export default function Dashboard() {
 
         {/* ================= TAB 4: REFERRALS ================= */}
         {tab === 'referrals' && (
-          <div className="max-w-3xl mx-auto space-y-6 animate-fade">
-            <div className="rounded-3xl border border-stone-200 bg-white p-8 shadow-xs text-center space-y-4">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-forest-100 text-forest-800">
-                <Share2 className="h-7 w-7 text-forest-800" />
+          <div className="max-w-4xl mx-auto space-y-6 animate-fade">
+            {/* Referral Hero / Program Summary */}
+            <div className="rounded-3xl border border-stone-200 bg-white p-7 sm:p-8 shadow-xs space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-forest-100 text-forest-800">
+                    <Users className="h-6 w-6 text-forest-800" />
+                  </div>
+                  <div>
+                    <h2 className="font-display text-2xl font-bold text-forest-950">
+                      Investor Partner Network
+                    </h2>
+                    <p className="text-xs text-ink-500">
+                      Earn bonus dividends by introducing investors to verified agricultural opportunities
+                    </p>
+                  </div>
+                </div>
+
+                <div className="inline-flex items-center gap-2 rounded-2xl bg-forest-50 px-4 py-2 border border-forest-200 self-start sm:self-auto">
+                  <span className="text-xs text-forest-800 font-medium">Commission Rate:</span>
+                  <span className="font-display text-lg font-bold text-forest-900">
+                    {platformSettings?.referral_bonus_pct ?? 10}%
+                  </span>
+                </div>
               </div>
 
-              <h2 className="font-display text-2xl font-bold text-forest-950">
-                Investor Partner Network
-              </h2>
-              <p className="text-xs sm:text-sm text-ink-600 max-w-lg mx-auto leading-relaxed">
-                Introduce other agricultural investors to Feldwert Capital. When an investor signs up
-                with your referral code and funds their first project, you earn a 5% bonus dividend
-                directly to your wallet.
+              <p className="text-xs sm:text-sm text-ink-600 leading-relaxed">
+                When a new investor registers using your referral code or direct link and funds an agricultural holding, you earn an automated{' '}
+                <strong className="text-forest-950 font-bold">{platformSettings?.referral_bonus_pct ?? 10}% bonus</strong> credited directly to your wallet balance.
               </p>
 
-              {/* Referral Code Box */}
-              <div className="max-w-md mx-auto rounded-2xl border-2 border-dashed border-forest-600/30 bg-forest-50/50 p-5 space-y-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-ink-500 block">
-                  Your Unique Referral Code
-                </span>
-                <div className="font-display text-3xl font-bold tracking-wider text-forest-900">
-                  {profile?.referral_code}
+              {/* Referral Code & Link Sharing Suite */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-2">
+                {/* Referral Code Card */}
+                <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-ink-500">
+                      Your Referral Code
+                    </span>
+                    <span className="text-[10px] text-ink-400 font-mono">For signup forms</span>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 rounded-xl bg-white border border-stone-200 px-4 py-2.5">
+                    <span className="font-display text-2xl font-bold tracking-wider text-forest-950">
+                      {referralCode || '—'}
+                    </span>
+                    <button
+                      type="button"
+                      id="btn-copy-referral-code"
+                      onClick={handleCopyCode}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-forest-800 hover:bg-forest-700 px-3.5 py-1.5 text-xs font-bold text-white transition-colors shrink-0"
+                    >
+                      {copiedCode ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                      <span>{copiedCode ? 'Copied' : 'Copy Code'}</span>
+                    </button>
+                  </div>
                 </div>
+
+                {/* Direct Referral Link Card */}
+                <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-ink-500">
+                      Direct Referral Link
+                    </span>
+                    <span className="text-[10px] text-ink-400 font-mono">Auto-applies code</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 rounded-xl bg-white border border-stone-200 px-3 py-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={referralLink}
+                      className="w-full bg-transparent text-xs text-ink-600 font-mono outline-none select-all truncate"
+                    />
+                    <button
+                      type="button"
+                      id="btn-copy-referral-link"
+                      onClick={handleCopyLink}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 hover:bg-stone-50 px-3 py-1.5 text-xs font-bold text-forest-900 transition-colors shrink-0"
+                    >
+                      {copiedLink ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                      <span>{copiedLink ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Prominent Direct Share Button */}
+              <div className="rounded-2xl bg-forest-950 text-white p-5 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="space-y-1 text-center sm:text-left">
+                  <span className="text-xs font-semibold text-forest-300 uppercase tracking-wider">
+                    Instant Social & App Invitation
+                  </span>
+                  <h4 className="font-display text-base sm:text-lg font-bold text-white">
+                    Share directly with your contacts
+                  </h4>
+                  <p className="text-xs text-stone-300">
+                    Opens WhatsApp, Messages, Telegram, Email, and installed apps on your device.
+                  </p>
+                </div>
+
                 <button
                   type="button"
-                  id="btn-copy-referral"
-                  onClick={handleCopyCode}
-                  className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-forest-800 px-5 py-2 text-xs font-bold text-white hover:bg-forest-700 transition-colors"
+                  id="btn-share-referral"
+                  onClick={handleShareReferral}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-gold-500 hover:bg-gold-400 text-forest-950 font-bold px-6 py-3.5 text-xs sm:text-sm shadow-md transition-colors shrink-0"
                 >
-                  <Copy className="h-3.5 w-3.5" />
-                  <span>{copiedCode ? 'Copied to Clipboard!' : 'Copy Referral Code'}</span>
+                  <Share2 className="h-4 w-4 text-forest-950" />
+                  <span>Share Referral Link</span>
                 </button>
               </div>
 
-              {/* Referral Metrics */}
-              <div className="grid grid-cols-2 gap-4 max-w-md mx-auto pt-4">
-                <div className="rounded-xl bg-stone-50 p-4 border border-stone-200">
-                  <span className="text-xs text-ink-500">Referred Investors</span>
-                  <div className="font-display text-2xl font-bold text-forest-950 mt-0.5">0</div>
+              {/* Referral Metrics Grid (Real Supabase Data) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                <div className="rounded-2xl bg-stone-50 p-4 border border-stone-200">
+                  <span className="text-[11px] text-ink-500 font-medium block">
+                    Referred Investors
+                  </span>
+                  <div className="font-display text-2xl font-bold text-forest-950 mt-1">
+                    {referredUsers.length}
+                  </div>
+                  <span className="text-[10px] text-ink-400">Total invited network</span>
                 </div>
-                <div className="rounded-xl bg-stone-50 p-4 border border-stone-200">
-                  <span className="text-xs text-ink-500">Referral Earnings</span>
-                  <div className="font-display text-2xl font-bold text-emerald-700 mt-0.5">0 UGX</div>
+
+                <div className="rounded-2xl bg-stone-50 p-4 border border-stone-200">
+                  <span className="text-[11px] text-ink-500 font-medium block">
+                    Commission Rate
+                  </span>
+                  <div className="font-display text-2xl font-bold text-forest-900 mt-1">
+                    {platformSettings?.referral_bonus_pct ?? 10}%
+                  </div>
+                  <span className="text-[10px] text-ink-400">Per funded holding</span>
+                </div>
+
+                <div className="rounded-2xl bg-stone-50 p-4 border border-stone-200">
+                  <span className="text-[11px] text-ink-500 font-medium block">
+                    Commissions Earned
+                  </span>
+                  <div className="font-display text-2xl font-bold text-emerald-700 mt-1">
+                    {formatUGX(
+                      txs
+                        .filter((t) => t.type === 'referral_bonus')
+                        .reduce((sum, t) => sum + (t.amount || 0), 0)
+                    )}
+                  </div>
+                  <span className="text-[10px] text-emerald-600 font-medium">Credited to wallet</span>
+                </div>
+
+                <div className="rounded-2xl bg-stone-50 p-4 border border-stone-200">
+                  <span className="text-[11px] text-ink-500 font-medium block">
+                    Payout Records
+                  </span>
+                  <div className="font-display text-2xl font-bold text-gold-600 mt-1">
+                    {txs.filter((t) => t.type === 'referral_bonus').length}
+                  </div>
+                  <span className="text-[10px] text-ink-400">Successful bonuses</span>
                 </div>
               </div>
+            </div>
+
+            {/* Referred Users Network Table */}
+            <div className="rounded-3xl border border-stone-200 bg-white p-6 sm:p-7 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-display text-lg font-bold text-forest-950">
+                    Referred Network
+                  </h3>
+                  <p className="text-xs text-ink-500">
+                    Investors registered with your referral credentials
+                  </p>
+                </div>
+                <span className="rounded-full bg-stone-100 text-ink-600 text-xs px-2.5 py-0.5 font-medium">
+                  {referredUsers.length} member{referredUsers.length === 1 ? '' : 's'}
+                </span>
+              </div>
+
+              {referredUsers.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-stone-200 p-8 text-center space-y-3">
+                  <Users className="h-8 w-8 text-stone-300 mx-auto" />
+                  <p className="text-xs text-ink-500 max-w-sm mx-auto">
+                    You have not referred any investors yet. Share your referral code or link to start earning dividends.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleShareReferral}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-forest-800 hover:bg-forest-700 text-white px-4 py-2 text-xs font-bold transition-colors"
+                  >
+                    <Share2 className="h-3.5 w-3.5" />
+                    <span>Share Your Link</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-stone-200 text-ink-500 font-medium">
+                        <th className="pb-3">Investor</th>
+                        <th className="pb-3">Username</th>
+                        <th className="pb-3">Joined Date</th>
+                        <th className="pb-3 text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-100">
+                      {referredUsers.map((u) => (
+                        <tr key={u.id} className="hover:bg-stone-50/50">
+                          <td className="py-3.5 font-semibold text-forest-950">
+                            {u.full_name || 'Agricultural Partner'}
+                          </td>
+                          <td className="py-3.5 font-mono text-ink-500">@{u.username}</td>
+                          <td className="py-3.5 text-ink-500">{formatDate(u.created_at)}</td>
+                          <td className="py-3.5 text-right">
+                            <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold capitalize">
+                              {u.status || 'Active'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Referral Commission Transactions Table */}
+            <div className="rounded-3xl border border-stone-200 bg-white p-6 sm:p-7 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-display text-lg font-bold text-forest-950">
+                    Commission Dividends
+                  </h3>
+                  <p className="text-xs text-ink-500">
+                    Direct commission credits earned from referred investor holdings
+                  </p>
+                </div>
+                <span className="rounded-full bg-stone-100 text-ink-600 text-xs px-2.5 py-0.5 font-medium">
+                  {txs.filter((t) => t.type === 'referral_bonus').length} payout{txs.filter((t) => t.type === 'referral_bonus').length === 1 ? '' : 's'}
+                </span>
+              </div>
+
+              {txs.filter((t) => t.type === 'referral_bonus').length === 0 ? (
+                <p className="text-xs text-ink-500 py-6 text-center">
+                  No commission dividends recorded yet. Bonus payouts will appear here automatically when referred investors fund projects.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-stone-200 text-ink-500 font-medium">
+                        <th className="pb-3">Reference</th>
+                        <th className="pb-3">Date</th>
+                        <th className="pb-3 text-right">Amount</th>
+                        <th className="pb-3 text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-100">
+                      {txs
+                        .filter((t) => t.type === 'referral_bonus')
+                        .map((t) => (
+                          <tr key={t.id} className="hover:bg-stone-50/50">
+                            <td className="py-3.5 font-mono text-[11px] text-forest-950 font-bold">
+                              {t.reference}
+                            </td>
+                            <td className="py-3.5 text-ink-500">{formatDate(t.created_at)}</td>
+                            <td className="py-3.5 text-right font-display font-bold text-emerald-700">
+                              +{formatUGX(t.amount)}
+                            </td>
+                            <td className="py-3.5 text-right">
+                              <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold capitalize">
+                                {t.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1063,24 +1454,85 @@ export default function Dashboard() {
 
             <p className="text-xs text-ink-600 leading-relaxed mb-4">
               {modal === 'deposit'
-                ? 'Initiate a secure deposit via Uganda Mobile Money. After submitting, approve the prompt on your handset or complete via merchant pay.'
+                ? `Initiate a secure deposit via Uganda Mobile Money. Minimum deposit: ${formatUGX(
+                    platformSettings?.min_deposit ?? 10000
+                  )}. After submitting, approve the prompt on your handset.`
                 : withdrawalLockInfo.isLocked
-                ? 'Withdrawals are currently locked for your account under security review protocols.'
-                : `Enter the amount to withdraw to your registered MTN or Airtel Mobile Money wallet. Available withdrawable balance: ${formatUGX(
-                    withdrawableBalance
-                  )}.`}
+                ? `Withdrawals are currently locked under platform security holding rules. Minimum withdrawal: ${formatUGX(
+                    platformSettings?.min_withdrawal ?? 10000
+                  )}.`
+                : `Enter the amount to withdraw to your registered MTN or Airtel Mobile Money wallet. Minimum withdrawal: ${formatUGX(
+                    platformSettings?.min_withdrawal ?? 10000
+                  )}. Available balance: ${formatUGX(withdrawableBalance)}.`}
             </p>
 
-            {modal === 'withdraw' && withdrawalLockInfo.isLocked && (
-              <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 mb-4 text-xs text-amber-900 space-y-1">
-                <div className="flex items-center gap-2 font-bold text-amber-800">
-                  <Lock className="h-4 w-4 shrink-0 text-amber-700" />
-                  <span>Withdrawal Lock Active</span>
+            {modal === 'withdraw' && (
+              <div
+                className={`rounded-2xl p-4 mb-4 text-xs space-y-1.5 ${
+                  withdrawalLockInfo.isLocked
+                    ? 'border border-amber-300 bg-amber-50/90 text-amber-900'
+                    : 'border border-stone-200 bg-stone-50 text-forest-950'
+                }`}
+              >
+                <div className="flex items-center justify-between font-bold">
+                  <div className="flex items-center gap-2">
+                    <Lock
+                      className={`h-4 w-4 shrink-0 ${
+                        withdrawalLockInfo.isLocked ? 'text-amber-700' : 'text-forest-700'
+                      }`}
+                    />
+                    <span>
+                      {withdrawalLockInfo.isLocked
+                        ? 'Withdrawal Lock Active'
+                        : 'Withdrawal Status'}
+                    </span>
+                  </div>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                      withdrawalLockInfo.isLocked
+                        ? 'bg-amber-200 text-amber-800'
+                        : 'bg-emerald-100 text-emerald-800'
+                    }`}
+                  >
+                    {platformSettings?.withdrawal_lock_enabled &&
+                    (platformSettings?.withdrawal_lock_days ?? 0) > 0
+                      ? `${platformSettings.withdrawal_lock_days} Days Policy`
+                      : 'No Lock'}
+                  </span>
                 </div>
-                <p className="text-[11px] leading-relaxed">{withdrawalLockInfo.reason}</p>
-                <p className="text-[11px] text-amber-700 font-medium">
-                  Capital remains securely allocated and actively compounding.
-                </p>
+
+                {withdrawalLockInfo.isLocked ? (
+                  <>
+                    <p className="text-[11px] font-medium text-amber-900">
+                      Withdrawals are currently locked.
+                    </p>
+                    <p className="text-[11px] leading-relaxed text-amber-800">
+                      Withdrawals will become available after{' '}
+                      <span className="font-bold">
+                        {platformSettings?.withdrawal_lock_days ?? 7} days
+                      </span>{' '}
+                      (on{' '}
+                      <span className="font-bold">
+                        {formatDate(withdrawalLockInfo.lockedUntil?.toISOString())}
+                      </span>
+                      ).
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-[11px] text-ink-600">
+                    {platformSettings?.withdrawal_lock_enabled &&
+                    (platformSettings?.withdrawal_lock_days ?? 0) > 0
+                      ? `Holding period completed (${platformSettings.withdrawal_lock_days}-day lock satisfied). You can withdraw immediately.`
+                      : 'Immediate withdrawals enabled (No Lock restriction active).'}
+                  </p>
+                )}
+
+                <div className="pt-1.5 flex items-center justify-between text-[11px] font-semibold border-t border-stone-200/60">
+                  <span className="text-ink-600">Minimum withdrawal:</span>
+                  <span className="font-mono text-forest-900 font-bold">
+                    {formatUGX(platformSettings?.min_withdrawal ?? 10000)}
+                  </span>
+                </div>
               </div>
             )}
 
@@ -1156,10 +1608,10 @@ export default function Dashboard() {
                     id="input-funds-amount"
                     type="number"
                     autoFocus
-                    min={10000}
+                    min={modal === 'withdraw' ? (platformSettings?.min_withdrawal ?? 10000) : 10000}
                     max={modal === 'withdraw' ? withdrawableBalance : 100000000}
-                    step={10000}
-                    placeholder="e.g. 500000"
+                    step={1000}
+                    placeholder={`e.g. ${modal === 'withdraw' ? (platformSettings?.min_withdrawal ?? 10000) : 500000}`}
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     disabled={modal === 'withdraw' && withdrawalLockInfo.isLocked}
@@ -1170,7 +1622,10 @@ export default function Dashboard() {
 
               {/* Quick Amount Pills */}
               <div className="flex flex-wrap gap-1.5">
-                {[50000, 100000, 250000, 500000, 1000000, 2500000].map((preset) => (
+                {(modal === 'withdraw'
+                  ? Array.from(new Set([platformSettings?.min_withdrawal ?? 10000, 50000, 100000, 250000, 500000, 1000000]))
+                  : [50000, 100000, 250000, 500000, 1000000, 2500000]
+                ).map((preset) => (
                   <button
                     key={preset}
                     type="button"
@@ -1286,6 +1741,14 @@ export default function Dashboard() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Floating Toast Notification */}
+      {shareToast && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-2xl bg-forest-950 text-white px-5 py-3 shadow-2xl border border-forest-800 text-xs font-semibold flex items-center gap-2.5 animate-fade-up">
+          <CheckCircle2 className="h-4 w-4 text-gold-400 shrink-0" />
+          <span>{shareToast}</span>
         </div>
       )}
     </AppLayout>

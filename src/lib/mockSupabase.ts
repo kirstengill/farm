@@ -218,6 +218,24 @@ const DEFAULT_FARMS: FarmProject[] = [
     funded_amount: 122500000,
     created_at: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(),
   },
+  {
+    id: 'farm-7',
+    slug: 'bavarian-ridge-pig-farm',
+    name: 'Bavarian Ridge Modern Pig Farm',
+    category: 'Pig Farming',
+    description:
+      'A modern bio-secure and free-range pig farming operation in the Bavarian countryside with pre-contracted premium pork supply agreements.',
+    location: 'Lower Bavaria, Germany',
+    image_url: '/images/realistic_farm_pig.jpg',
+    status: 'active',
+    min_amount: 100000,
+    max_amount: 15000000,
+    expected_return_pct: 16.5,
+    duration_months: 6,
+    target_amount: 250000000,
+    funded_amount: 145000000,
+    created_at: new Date(Date.now() - 12 * 24 * 3600 * 1000).toISOString(),
+  },
 ]
 
 interface AuthUser {
@@ -387,10 +405,10 @@ function getInitialState(): DBState {
     ],
     videos: [...DEFAULT_VIDEOS],
     platform_settings: [
-      { key: 'referral_bonus_pct', value: 5, updated_at: new Date().toISOString() },
+      { key: 'referral_bonus_pct', value: 10, updated_at: new Date().toISOString() },
       { key: 'min_deposit', value: 10000, updated_at: new Date().toISOString() },
-      { key: 'min_withdrawal', value: 20000, updated_at: new Date().toISOString() },
-      { key: 'withdrawal_lock_days', value: 3, updated_at: new Date().toISOString() },
+      { key: 'min_withdrawal', value: 10000, updated_at: new Date().toISOString() },
+      { key: 'withdrawal_lock_days', value: 7, updated_at: new Date().toISOString() },
       { key: 'withdrawal_lock_enabled', value: true, updated_at: new Date().toISOString() },
       { key: 'currency', value: 'UGX', updated_at: new Date().toISOString() },
       { key: 'brand_name', value: 'Feldwert Capital', updated_at: new Date().toISOString() },
@@ -408,17 +426,26 @@ function loadState(): DBState {
       return init
     }
     const parsed: DBState = JSON.parse(raw)
-    // Validate if platform_settings has withdrawal_lock_days
-    const hasLockSetting = parsed.platform_settings?.some((s) => s.key === 'withdrawal_lock_days')
-    if (!hasLockSetting) {
-      parsed.platform_settings = parsed.platform_settings || []
-      parsed.platform_settings.push(
-        { key: 'withdrawal_lock_days', value: 3, updated_at: new Date().toISOString() },
-        { key: 'withdrawal_lock_enabled', value: true, updated_at: new Date().toISOString() },
-        { key: 'min_deposit', value: 10000, updated_at: new Date().toISOString() },
-        { key: 'min_withdrawal', value: 20000, updated_at: new Date().toISOString() },
-        { key: 'currency', value: 'UGX', updated_at: new Date().toISOString() }
-      )
+    // Ensure platform_settings has all required keys
+    parsed.platform_settings = parsed.platform_settings || []
+    const requiredKeys: Record<string, any> = {
+      referral_bonus_pct: 10,
+      min_deposit: 10000,
+      min_withdrawal: 10000,
+      withdrawal_lock_days: 7,
+      withdrawal_lock_enabled: true,
+      currency: 'UGX',
+      brand_name: 'Feldwert Capital',
+    }
+    let modified = false
+    for (const [k, defaultVal] of Object.entries(requiredKeys)) {
+      const existing = parsed.platform_settings.find((s) => s.key === k)
+      if (!existing) {
+        parsed.platform_settings.push({ key: k, value: defaultVal, updated_at: new Date().toISOString() })
+        modified = true
+      }
+    }
+    if (modified) {
       saveState(parsed)
     }
     // Validate if videos collection exists and is seeded
@@ -584,6 +611,18 @@ class MockQueryBuilder {
 
   async update(patch: any) {
     const state = loadState()
+    const currentUser = getStoredSessionUser()
+    const currentProfile = currentUser ? state.profiles.find((p) => p.id === currentUser.id) : null
+
+    if (this.tableName === 'platform_settings') {
+      if (!currentProfile || (currentProfile.role !== 'admin' && !currentProfile.is_admin)) {
+        return {
+          data: null,
+          error: { message: 'Unauthorized. Administrator privileges required to modify platform settings.' },
+        }
+      }
+    }
+
     const list = (state[this.tableName] as any[]) || []
     let updatedCount = 0
 
@@ -608,6 +647,18 @@ class MockQueryBuilder {
 
   async delete() {
     const state = loadState()
+    const currentUser = getStoredSessionUser()
+    const currentProfile = currentUser ? state.profiles.find((p) => p.id === currentUser.id) : null
+
+    if (this.tableName === 'platform_settings') {
+      if (!currentProfile || (currentProfile.role !== 'admin' && !currentProfile.is_admin)) {
+        return {
+          data: null,
+          error: { message: 'Unauthorized. Administrator privileges required to modify platform settings.' },
+        }
+      }
+    }
+
     const list = (state[this.tableName] as any[]) || []
 
     state[this.tableName] = list.filter((item) => {
@@ -623,6 +674,18 @@ class MockQueryBuilder {
 
   async upsert(recordOrRecords: any) {
     const state = loadState()
+    const currentUser = getStoredSessionUser()
+    const currentProfile = currentUser ? state.profiles.find((p) => p.id === currentUser.id) : null
+
+    if (this.tableName === 'platform_settings') {
+      if (!currentProfile || (currentProfile.role !== 'admin' && !currentProfile.is_admin)) {
+        return {
+          data: null,
+          error: { message: 'Unauthorized. Administrator privileges required to modify platform settings.' },
+        }
+      }
+    }
+
     const records = Array.isArray(recordOrRecords) ? recordOrRecords : [recordOrRecords]
     const list = (state[this.tableName] as any[]) || []
 
@@ -808,7 +871,7 @@ export const mockSupabase = {
       // Check configured minimum
       const minKey = p_type === 'deposit' ? 'min_deposit' : 'min_withdrawal'
       const minSetting = state.platform_settings.find((s) => s.key === minKey)
-      const minVal = Number(minSetting?.value ?? (p_type === 'deposit' ? 10000 : 20000))
+      const minVal = Number(minSetting?.value ?? 10000)
 
       if (p_amount < minVal) {
         return {
@@ -840,11 +903,11 @@ export const mockSupabase = {
         const lockDaysSetting = state.platform_settings.find(
           (s) => s.key === 'withdrawal_lock_days'
         )
-        const lockDays = Number(lockDaysSetting?.value ?? 3)
+        const lockDays = Number(lockDaysSetting?.value ?? 7)
         const lockEnabledSetting = state.platform_settings.find(
           (s) => s.key === 'withdrawal_lock_enabled'
         )
-        const lockEnabled = lockEnabledSetting ? Boolean(lockEnabledSetting.value) : lockDays > 0
+        const lockEnabled = lockEnabledSetting ? Boolean(lockEnabledSetting.value) && lockDays > 0 : lockDays > 0
 
         // Check if user has explicit lock date on their profile
         let lockExpiryDate: Date | null = null
@@ -878,13 +941,11 @@ export const mockSupabase = {
             day: '2-digit',
             month: 'short',
             year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
           })
           return {
             data: null,
             error: {
-              message: `Withdrawal locked until ${dateFormatted}. The platform withdrawal lock period is ${lockDays} days.`,
+              message: `Withdrawals are currently locked. Withdrawals will become available after ${lockDays} days (on ${dateFormatted}).`,
             },
           }
         }
@@ -1022,6 +1083,54 @@ export const mockSupabase = {
         read: false,
         created_at: new Date().toISOString(),
       })
+
+      // Process referral commission dynamically from platform_settings table
+      const investorProfile = state.profiles.find((p) => p.id === userId)
+      if (investorProfile?.referred_by) {
+        const referrerProfile = state.profiles.find(
+          (p) => p.id === investorProfile.referred_by || p.referral_code === investorProfile.referred_by
+        )
+        if (referrerProfile) {
+          const refBonusSetting = state.platform_settings.find((s) => s.key === 'referral_bonus_pct')
+          const refPct = Number(refBonusSetting?.value ?? 10)
+          if (refPct > 0) {
+            const commission = Math.round((p_amount * refPct) / 100)
+            if (commission > 0) {
+              const refWallet = state.wallets.find((w) => w.user_id === referrerProfile.id)
+              if (refWallet) {
+                refWallet.balance += commission
+                refWallet.total_returns = (refWallet.total_returns || 0) + commission
+                refWallet.updated_at = new Date().toISOString()
+              }
+              state.transactions.unshift({
+                id: `tx-ref-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                user_id: referrerProfile.id,
+                type: 'referral_bonus',
+                amount: commission,
+                status: 'completed',
+                reference: `REF-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+                method: 'wallet',
+                meta: {
+                  referred_user: investorProfile.username,
+                  investment_amount: p_amount,
+                  commission_pct: refPct,
+                },
+                created_at: new Date().toISOString(),
+              })
+              state.notifications.unshift({
+                id: `notif-${Date.now()}`,
+                user_id: referrerProfile.id,
+                title: 'Referral Dividend Credited',
+                body: `You received a ${refPct}% referral dividend of UGX ${commission.toLocaleString(
+                  'en-US'
+                )} from @${investorProfile.username}'s investment.`,
+                read: false,
+                created_at: new Date().toISOString(),
+              })
+            }
+          }
+        }
+      }
 
       saveState(state)
       return { data: invId, error: null }

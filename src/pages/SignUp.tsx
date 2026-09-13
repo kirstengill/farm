@@ -1,5 +1,5 @@
 import { useState, useMemo, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Eye,
   EyeOff,
@@ -18,13 +18,16 @@ import { signUpWithUsername } from '../lib/auth'
 
 export default function SignUp() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const initialReferralCode = (searchParams.get('ref') || '').trim()
+
   const [formData, setFormData] = useState({
     fullName: '',
     username: '',
     phone: '',
     password: '',
     confirmPassword: '',
-    referralCode: '',
+    referralCode: initialReferralCode,
   })
   const [termsAccepted, setTermsAccepted] = useState(true)
   const [showPassword, setShowPassword] = useState(false)

@@ -1,28 +1,16 @@
-import { useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
-  ArrowDownLeft,
   ArrowUpRight,
-  Bell,
   CheckCircle2,
-  ChevronDown,
-  Coins,
-  Compass,
-  FileText,
-  Home,
-  Layers,
   LayoutDashboard,
   LogOut,
-  Menu,
   Plus,
-  Settings,
   Share2,
   Shield,
   Sprout,
   User,
-  Video,
   Wallet as WalletIcon,
-  X,
 } from 'lucide-react'
 import { useAuth } from '../state/auth'
 import { formatUGX } from '../lib/format'
@@ -43,18 +31,15 @@ export default function AppLayout({
   onQuickDeposit,
   onQuickWithdraw,
 }: AppLayoutProps) {
-  const { user, profile, wallet, signOut } = useAuth()
+  const { profile, wallet, signOut } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const isMarketplace = location.pathname === '/marketplace'
   const isDashboard = location.pathname === '/dashboard'
-  const isVideos = location.pathname === '/videos'
   const isAdmin = location.pathname === '/admin'
 
   const handleNavClick = (key: string, path?: string) => {
-    setMobileMenuOpen(false)
     if (path) {
       navigate(path)
       return
@@ -85,18 +70,9 @@ export default function AppLayout({
       action: () => handleNavClick('marketplace', '/marketplace'),
     },
     {
-      id: 'nav-videos',
-      key: 'videos',
-      label: 'Videos',
-      icon: Video,
-      badge: 'New',
-      isActive: isVideos || (isDashboard && activeTab === 'videos'),
-      action: () => handleNavClick('videos', '/videos'),
-    },
-    {
-      id: 'nav-transactions',
+      id: 'nav-wallet',
       key: 'wallet',
-      label: 'Transactions',
+      label: 'Wallet',
       icon: WalletIcon,
       isActive: isDashboard && activeTab === 'wallet',
       action: () => handleNavClick('wallet', '/dashboard?tab=wallet'),
@@ -120,16 +96,18 @@ export default function AppLayout({
   ]
 
   return (
-    <div className="min-h-screen bg-[#f8f9f6] text-ink-900 flex flex-col md:flex-row antialiased">
-      {/* ================= DESKTOP SIDEBAR ================= */}
-      <aside className="hidden md:flex md:w-64 lg:w-72 flex-col shrink-0 border-r border-stone-200/80 bg-white p-5 sticky top-0 h-screen z-30 justify-between">
-        <div className="space-y-6">
-          {/* Logo */}
-          <div className="pb-4 border-b border-stone-100">
-            <Link to="/dashboard" className="block focus:outline-none">
-              <Logo />
-            </Link>
-          </div>
+    <div className="min-h-screen bg-[#f8f9f6] text-ink-900 flex flex-col antialiased">
+      {/* ================= USER DASHBOARD TOP NAVIGATION ================= */}
+      <header className="sticky top-0 z-40 flex items-center border-b border-stone-200/80 bg-white px-4 sm:px-6 lg:px-8 py-3.5 shadow-xs">
+        <Link to="/dashboard" className="focus:outline-none">
+          <Logo />
+        </Link>
+      </header>
+
+      <div className="flex-1 flex flex-col md:flex-row min-w-0">
+        {/* ================= DESKTOP SIDEBAR ================= */}
+        <aside className="hidden md:flex md:w-64 lg:w-72 flex-col shrink-0 border-r border-stone-200/80 bg-white p-5 sticky top-[57px] h-[calc(100vh-57px)] z-30 justify-between">
+          <div className="space-y-6">
 
           {/* User Quick Card */}
           <div className="rounded-2xl border border-stone-200/80 bg-stone-50/70 p-3.5 flex items-center gap-3">
@@ -272,113 +250,11 @@ export default function AppLayout({
         </div>
       </aside>
 
-      {/* ================= MOBILE TOP HEADER ================= */}
-      <header className="md:hidden sticky top-0 z-40 flex items-center justify-between border-b border-stone-200 bg-white px-4 py-3 shadow-xs">
-        <Link to="/dashboard" className="focus:outline-none">
-          <Logo />
-        </Link>
-
-        <div className="flex items-center gap-2">
-          {/* Quick Balance Pill */}
-          <Link
-            to="/dashboard?tab=wallet"
-            className="inline-flex items-center gap-1 rounded-full bg-forest-50 px-2.5 py-1 text-xs font-bold text-forest-900 border border-forest-200"
-          >
-            <Coins className="h-3.5 w-3.5 text-gold-600" />
-            <span>{formatUGX(wallet?.balance ?? 0)}</span>
-          </Link>
-
-          {/* Quick Deposit Trigger */}
-          <button
-            type="button"
-            onClick={onQuickDeposit || (() => handleNavClick('wallet', '/dashboard?tab=wallet'))}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-forest-800 text-white"
-            title="Deposit funds"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-
-          {/* Mobile Menu Dropdown Toggle */}
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 text-ink-700 hover:bg-stone-50"
-          >
-            {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-          </button>
-        </div>
-      </header>
-
-      {/* Mobile Slide-down Menu Drawer */}
-      {mobileMenuOpen && (
-        <div className="md:hidden fixed inset-x-0 top-[57px] bottom-[65px] z-30 bg-white/95 backdrop-blur-md p-5 overflow-y-auto border-b border-stone-200 space-y-4 animate-fade">
-          <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-            <p className="text-xs text-ink-500 font-medium">Logged in as:</p>
-            <p className="font-display text-base font-bold text-forest-950 mt-0.5">
-              {profile?.full_name || profile?.username}
-            </p>
-            <p className="text-xs text-ink-500 font-mono">@{profile?.username}</p>
-          </div>
-
-          <div className="space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={item.action}
-                  className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-bold ${
-                    item.isActive ? 'bg-forest-800 text-white' : 'text-ink-700 hover:bg-forest-50'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Icon className="h-4 w-4" />
-                    <span>{item.label}</span>
-                  </div>
-                  {item.badge && (
-                    <span className="rounded-md bg-forest-100 text-forest-800 px-2 py-0.5 text-xs font-semibold">
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-
-            {profile?.is_admin && (
-              <Link
-                to="/admin"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-bold text-forest-900 hover:bg-gold-50 border border-gold-200"
-              >
-                <div className="flex items-center gap-3">
-                  <Shield className="h-4 w-4 text-gold-600" />
-                  <span>Admin Operations</span>
-                </div>
-                <span className="rounded-md bg-gold-200 text-forest-900 px-2 py-0.5 text-xs">
-                  Staff
-                </span>
-              </Link>
-            )}
-          </div>
-
-          <div className="pt-4 border-t border-stone-200">
-            <button
-              type="button"
-              onClick={signOut}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-50 py-3 text-sm font-bold text-red-700"
-            >
-              <LogOut className="h-4 w-4" />
-              <span>Sign Out</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ================= MAIN CONTENT AREA ================= */}
-      <main className="flex-1 min-w-0 pb-20 md:pb-10">
-        {children}
-      </main>
+        {/* ================= MAIN CONTENT AREA ================= */}
+        <main className="flex-1 min-w-0 pb-20 md:pb-10">
+          {children}
+        </main>
+      </div>
 
       {/* ================= MOBILE BOTTOM NAVIGATION ================= */}
       {/* Exactly 5 items as requested: Dashboard, Investments, Transactions, Referrals, Profile */}

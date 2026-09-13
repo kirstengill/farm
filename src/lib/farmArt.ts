@@ -1,3 +1,5 @@
+import realisticPigPhoto from '../assets/images/realistic_farm_pig_1789297910415.jpg'
+
 /**
  * Realistic agricultural photography for investment programs.
  * Curated for fast loading, crisp resolution, and category matching.
@@ -10,6 +12,8 @@ export const FARM_IMAGES = {
   feedsAlt: 'https://images.unsplash.com/photo-1586771107445-d3ca888129ff?auto=format&fit=crop&w=1200&q=80',
   broilers: 'https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?auto=format&fit=crop&w=1200&q=80',
   broilersAlt: 'https://images.unsplash.com/photo-1516467508483-a7212febe31a?auto=format&fit=crop&w=1200&q=80',
+  pig: realisticPigPhoto || '/images/realistic_farm_pig.jpg',
+  pigAlt: 'https://images.unsplash.com/photo-1535268647677-300dbf3d78d1?auto=format&fit=crop&w=1200&q=80',
   generalFarm: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1200&q=80',
 }
 
@@ -18,7 +22,7 @@ export const FARM_ART = {
   cattle: FARM_IMAGES.cattle,
   feeds: FARM_IMAGES.feeds,
   broilers: FARM_IMAGES.broilers,
-  pig: FARM_IMAGES.cattle,
+  pig: FARM_IMAGES.pig,
   goat: FARM_IMAGES.feeds,
   pasture: FARM_IMAGES.generalFarm,
 }
@@ -26,7 +30,10 @@ export const FARM_ART = {
 /** Pick high-definition realistic photography matching an investment program or category. */
 export function farmArtFor(nameOrCategory: string = ''): string {
   const s = nameOrCategory.toLowerCase()
-  if (s.includes('cattle') || s.includes('cow') || s.includes('beef') || s.includes('dairy') || s.includes('livestock') || s.includes('pig')) {
+  if (s.includes('pig') || s.includes('piggery') || s.includes('swine') || s.includes('pork') || s.includes('boar')) {
+    return FARM_IMAGES.pig
+  }
+  if (s.includes('cattle') || s.includes('cow') || s.includes('beef') || s.includes('dairy') || s.includes('livestock')) {
     return FARM_IMAGES.cattle
   }
   if (s.includes('feed') || s.includes('grain') || s.includes('pellet') || s.includes('silage') || s.includes('alfalfa') || s.includes('goat') || s.includes('crop')) {

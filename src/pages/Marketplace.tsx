@@ -67,6 +67,9 @@ export default function Marketplace() {
         if (target.includes('cattle')) {
           return cat.includes('cattle') || name.includes('cattle') || cat.includes('cow')
         }
+        if (target.includes('pig')) {
+          return cat.includes('pig') || name.includes('pig') || cat.includes('swine') || cat.includes('piggery')
+        }
         if (target.includes('feed')) {
           return cat.includes('feed') || name.includes('feed') || cat.includes('grain')
         }
@@ -132,6 +135,7 @@ export default function Marketplace() {
   const categoryOptions = [
     { key: 'All', label: 'All Programs', icon: '🌱' },
     { key: 'Cattle', label: 'Cattle Investment', icon: '🐄' },
+    { key: 'Pig', label: 'Pig Farming', icon: '🐖' },
     { key: 'Feeds', label: 'Animal Feeds', icon: '🌾' },
     { key: 'Broilers', label: 'Broilers', icon: '🐔' },
   ]

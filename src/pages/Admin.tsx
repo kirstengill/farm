@@ -30,7 +30,6 @@ import {
   TrendingUp,
   UserCheck,
   Users,
-  Video,
   Wallet,
   X,
   XCircle,
@@ -41,9 +40,9 @@ import { formatUGX, formatDate } from '../lib/format'
 import type { Profile, FarmProject, Transaction, AppNotification, PlatformSettings } from '../lib/types'
 import FarmImage from '../components/FarmImage'
 import { farmArtFor } from '../lib/farmArt'
-import AdminVideoManager from '../components/AdminVideoManager'
+import AdminPlatformSettings from '../components/AdminPlatformSettings'
 
-type Tab = 'overview' | 'requests' | 'farms' | 'videos' | 'users' | 'transactions' | 'settings'
+type Tab = 'overview' | 'requests' | 'farms' | 'users' | 'transactions' | 'settings'
 type UserRow = Profile & { wallet?: { balance: number; total_invested?: number } }
 
 const initialFarmForm = {
@@ -341,7 +340,6 @@ export default function Admin() {
                 badge: pending.length > 0 ? String(pending.length) : undefined,
               },
               { id: 'farms', label: `Agri Programs (${farms.length})`, icon: Sprout },
-              { id: 'videos', label: 'Media & Videos', icon: Video },
               { id: 'users', label: `Investor Directory (${users.length})`, icon: Users },
               { id: 'transactions', label: 'Transaction Audit', icon: Wallet },
               { id: 'settings', label: 'System Parameters', icon: Settings },
@@ -642,6 +640,7 @@ export default function Admin() {
                       className="w-full rounded-xl border border-white/15 bg-[#1a231d] px-3 py-2 text-xs text-white focus:border-gold-500 focus:outline-none"
                     >
                       <option value="Cattle Investment">🐄 Cattle Investment</option>
+                      <option value="Pig Farming">🐖 Pig Farming</option>
                       <option value="Animal Feeds">🌾 Animal Feeds</option>
                       <option value="Broilers">🐔 Broilers</option>
                     </select>
@@ -811,23 +810,6 @@ export default function Admin() {
           </div>
         )}
 
-        {/* ================= TAB: VIDEOS MANAGEMENT ================= */}
-        {tab === 'videos' && (
-          <div className="space-y-6 animate-fade">
-            <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-white/10">
-              <div>
-                <h3 className="font-display text-xl font-bold text-white">
-                  Investor Educational Media & Video Management
-                </h3>
-                <p className="text-xs text-stone-400 mt-0.5">
-                  Publish tutorials, upload video media and custom thumbnails, and categorize guides for investor onboarding.
-                </p>
-              </div>
-            </div>
-            <AdminVideoManager />
-          </div>
-        )}
-
         {/* ================= TAB 4: USERS MANAGEMENT ================= */}
         {tab === 'users' && (
           <div className="space-y-4 animate-fade">
@@ -962,41 +944,7 @@ export default function Admin() {
         )}
 
         {/* ================= TAB 6: SYSTEM SETTINGS ================= */}
-        {tab === 'settings' && (
-          <div className="max-w-xl mx-auto space-y-6 animate-fade">
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-7 space-y-4">
-              <h3 className="font-display text-lg font-bold text-white">
-                Platform Financial Rules & Security Parameters
-              </h3>
-              <div className="space-y-3 text-xs">
-                <div className="flex justify-between py-2 border-b border-white/10">
-                  <span className="text-stone-400">Referral Commission Rate</span>
-                  <span className="font-bold text-gold-400">5.0%</span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-white/10">
-                  <span className="text-stone-400">Minimum Investor Deposit</span>
-                  <span className="font-bold text-white">50,000 UGX</span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-white/10">
-                  <span className="text-stone-400">Uganda MoMo Settlement Gateways</span>
-                  <span className="font-bold text-white">MTN Mobile Money & Airtel Money</span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-white/10">
-                  <span className="text-stone-400">Withdrawal Capital Security Lock</span>
-                  <span className="font-bold text-emerald-400">Enforced (7 Days Active Holding)</span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-white/10">
-                  <span className="text-stone-400">Settlement Verification SLA</span>
-                  <span className="font-bold text-white">&lt; 30 Minutes</span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-white/10">
-                  <span className="text-stone-400">Yield Accrual Frequency</span>
-                  <span className="font-bold text-white">Daily Accrual / Term Maturity Settlement</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {tab === 'settings' && <AdminPlatformSettings />}
       </div>
     </div>
   )
