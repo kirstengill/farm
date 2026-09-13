@@ -58,6 +58,12 @@ export async function getProfile(userId: string): Promise<Profile | null> {
     .eq('id', userId)
     .maybeSingle()
   if (error) throw error
+  if (data) {
+    return {
+      ...data,
+      is_admin: (data as any).role === 'admin' || (data as any).is_admin || (data as any).username === 'admin',
+    } as Profile
+  }
   return data as Profile | null
 }
 

@@ -1,38 +1,46 @@
 import { useState } from 'react'
+import { farmArtFor } from '../lib/farmArt'
 
-const FALLBACK =
-  'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=900&q=70'
-
-/** Image that fades in when loaded and swaps to the fallback farm photo if the primary URL fails. */
+/** Image that fades in when loaded and swaps to category farm photo if missing or failed. */
 export default function FarmImage({
   src,
   alt,
   className = '',
   eager = false,
 }: {
-  src: string
+  src?: string
   alt: string
   className?: string
   eager?: boolean
 }) {
   const [loaded, setLoaded] = useState(false)
   const [failed, setFailed] = useState(false)
-  const current = failed ? FALLBACK : src
+
+  const resolvedSrc = (!src || src.trim() === '') ? farmArtFor(alt) : src
+  const current = failed ? farmArtFor(alt) : resolvedSrc
 
   return (
-    <img
-      key={current}
-      src={current}
-      alt={alt}
-      loading={eager ? 'eager' : 'lazy'}
-      decoding="async"
-      className={`${className} transition-opacity duration-700 ${loaded ? 'opacity-100' : 'opacity-0'}`}
-      style={{ backgroundColor: '#e7e5df' }}
-      onLoad={() => setLoaded(true)}
-      onError={() => {
-        if (!failed) setFailed(true)
-        else setLoaded(true)
-      }}
-    />
+    <div className={`relative overflow-hidden ${className}`}>
+      {!loaded && (
+        <div className="absolute inset-0 animate-pulse bg-forest-900/10 dark:bg-forest-900/20" />
+      )}
+      <img
+        key={current}
+        src={current}
+        alt={alt}
+        loading={eager ? 'eager' : 'lazy'}
+        decoding="async"
+        referrerPolicy="no-referrer"
+        className={`h-full w-full object-cover transition-all duration-500 ${
+          loaded ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
+        }`}
+        onLoad={() => setLoaded(true)}
+        onError={() => {
+          if (!failed) setFailed(true)
+          else setLoaded(true)
+        }}
+      />
+    </div>
   )
 }
+

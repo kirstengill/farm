@@ -1,0 +1,6 @@
+{
+  "name": "Feldwert Capital",
+  "description": "Modern agricultural fintech platform for investments in cattle, animal feeds, and broilers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -37,6 +37,7 @@ create table if not exists public.profiles (
   status text not null default 'active' check (status in ('active','blocked')),
   referral_code text unique not null default public.generate_ref_code(),
   referred_by uuid references public.profiles(id),
+  withdrawal_locked_until timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -152,9 +153,12 @@ create table if not exists public.platform_settings (
 );
 insert into public.platform_settings (key, value) values
   ('referral_bonus_pct', '5'),
-  ('min_deposit', '50'),
-  ('min_withdrawal', '50'),
-  ('brand_name', '"FarmWert Capital"')
+  ('min_deposit', '10000'),
+  ('min_withdrawal', '20000'),
+  ('withdrawal_lock_days', '3'),
+  ('withdrawal_lock_enabled', 'true'),
+  ('currency', '"UGX"'),
+  ('brand_name', '"Feldwert Capital"')
 on conflict (key) do nothing;
 
 -- ---------- Audit log ----------
@@ -227,32 +231,55 @@ create policy "audit_admin_write" on public.audit_logs for insert with check (pu
 -- ============================================================
 
 -- User requests deposit/withdrawal — creates pending transaction
-create or replace function public.request_funds(p_type text, p_amount numeric)
+create or replace function public.request_funds(
+  p_type text,
+  p_amount numeric,
+  p_method text default 'mtn_mobile_money',
+  p_phone text default ''
+)
 returns text
 language plpgsql security definer set search_path = public as $$
 declare uid uuid := auth.uid();
   bal numeric; min_amount numeric;
+  lock_days numeric; lock_enabled boolean;
+  u_locked_until timestamptz; u_created_at timestamptz;
+  calc_lock_until timestamptz;
 begin
   if uid is null then raise exception 'Not authenticated'; end if;
   if p_amount <= 0 then raise exception 'Amount must be positive'; end if;
 
   select (value)::numeric into min_amount from public.platform_settings
     where key = case when p_type = 'deposit' then 'min_deposit' else 'min_withdrawal' end;
-  if p_amount < coalesce(min_amount, 50) then
-    raise exception 'Minimum is %', coalesce(min_amount, 50);
+  if p_amount < coalesce(min_amount, case when p_type = 'deposit' then 10000 else 20000 end) then
+    raise exception 'Minimum is UGX %', coalesce(min_amount, 20000);
   end if;
 
   if p_type = 'withdrawal' then
     select balance into bal from public.wallets where user_id = uid for update;
     if coalesce(bal, 0) < p_amount then raise exception 'Insufficient balance'; end if;
+
+    -- Enforce Withdrawal Lock
+    select (value)::numeric into lock_days from public.platform_settings where key = 'withdrawal_lock_days';
+    select (value)::boolean into lock_enabled from public.platform_settings where key = 'withdrawal_lock_enabled';
+    select withdrawal_locked_until, created_at into u_locked_until, u_created_at from public.profiles where id = uid;
+
+    if u_locked_until is not null and u_locked_until > now() then
+      raise exception 'Withdrawal locked until %', to_char(u_locked_until, 'YYYY-MM-DD HH24:MI');
+    elsif coalesce(lock_enabled, true) and coalesce(lock_days, 0) > 0 then
+      calc_lock_until := u_created_at + make_interval(days => lock_days::int);
+      if calc_lock_until > now() then
+        raise exception 'Withdrawal locked until %. Platform lock period is % days.',
+          to_char(calc_lock_until, 'YYYY-MM-DD HH24:MI'), lock_days;
+      end if;
+    end if;
   end if;
 
-  insert into public.transactions (user_id, type, amount, status, method)
-  values (uid, p_type, p_amount, 'pending', 'bank_transfer');
+  insert into public.transactions (user_id, type, amount, status, method, meta)
+  values (uid, p_type, p_amount, 'pending', p_method, jsonb_build_object('phone', p_phone, 'country', 'Uganda'));
 
   insert into public.notifications (user_id, title, body)
-  values (uid, 'Request submitted',
-          'Your ' || p_type || ' request of ' || p_amount || ' EUR is pending review.');
+  values (uid, initcap(p_type) || ' Request Submitted',
+          'Your ' || p_type || ' request of UGX ' || to_char(p_amount, 'FM999,999,999') || ' is pending review.');
 
   return 'Request submitted — pending admin review.';
 end $$;

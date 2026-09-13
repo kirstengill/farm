@@ -12,6 +12,7 @@ export interface Profile {
   is_admin?: boolean
   referral_code: string
   referred_by: string | null
+  withdrawal_locked_until?: string | null
   created_at: string
 }
 
@@ -100,8 +101,31 @@ export interface AuditLog {
   created_at: string
 }
 
-export const formatCurrency = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }).format(n)
+export interface PlatformSettings {
+  min_deposit: number
+  min_withdrawal: number
+  withdrawal_lock_days: number
+  withdrawal_lock_enabled: boolean
+  currency: string
+  referral_bonus_pct: number
+  brand_name: string
+}
 
-export const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+export interface VideoItem {
+  id: string
+  title: string
+  description: string
+  category: string
+  duration: string
+  thumbnail_url: string
+  video_url: string
+  published: boolean
+  sort_order?: number
+  created_at: string
+}
+
+export const formatCurrency = (n: number | null | undefined) =>
+  `UGX ${Math.round(n ?? 0).toLocaleString('en-US')}`
+
+export const formatDate = (iso: string | null | undefined) =>
+  iso ? new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'

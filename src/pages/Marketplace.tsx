@@ -1,246 +1,303 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import {
+  AlertCircle,
+  ArrowUpDown,
+  CheckCircle2,
+  Filter,
+  Layers,
+  Search,
+  ShieldCheck,
+  Sprout,
+  TrendingUp,
+} from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../state/auth'
-import { Button, Input, Loader } from '../components/ui'
-import { formatEUR } from '../lib/format'
-import { Progress } from '../components/ui'
+import { formatUGX } from '../lib/format'
 import type { FarmProject, Investment } from '../lib/types'
+import AppLayout from '../components/AppLayout'
+import InvestmentCard from '../components/InvestmentCard'
+import InvestmentDetailModal from '../components/InvestmentDetailModal'
 
 export default function Marketplace() {
-  const { user } = useAuth()
+  const { user, wallet, refreshProfile } = useAuth()
+  const navigate = useNavigate()
+
   const [farms, setFarms] = useState<FarmProject[]>([])
   const [loading, setLoading] = useState(true)
-  const [selected, setSelected] = useState<FarmProject | null>(null)
-  const [amount, setAmount] = useState('')
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [myInvestments, setMyInvestments] = useState<Investment[]>([])
-  const [category, setCategory] = useState<string>('All')
+  const [selectedFarm, setSelectedFarm] = useState<FarmProject | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState<string>('All')
+  const [sortBy, setSortBy] = useState<'roi' | 'duration' | 'min_amount'>('roi')
+  const [notification, setNotification] = useState<string | null>(null)
 
-  useEffect(() => {
-    ;(async () => {
-      const { data } = await supabase
+  // Load farms and user investments
+  const fetchFarms = async () => {
+    try {
+      const { data, error } = await supabase
         .from('farm_projects')
         .select('*')
         .eq('status', 'active')
         .order('created_at', { ascending: false })
-      setFarms((data as FarmProject[]) ?? [])
-      if (user) {
-        const { data: inv } = await supabase.from('investments').select('*').eq('user_id', user.id)
-        setMyInvestments((inv as Investment[]) ?? [])
+
+      if (!error && data) {
+        setFarms(data as FarmProject[])
       }
-      setLoading(false)
-    })()
-  }, [user])
-
-  const categories = ['All', ...Array.from(new Set(farms.map((f) => f.category)))]
-  const visible = category === 'All' ? farms : farms.filter((f) => f.category === category)
-
-  const invest = async () => {
-    if (!selected || !user) return
-    const amt = parseFloat(amount)
-    if (isNaN(amt) || amt < selected.min_amount) {
-      setError(`Minimum investment is ${formatEUR(selected.min_amount)}.`)
-      return
-    }
-    setBusy(true)
-    setError('')
-    try {
-      const { error: fnErr } = await supabase.rpc('create_investment', {
-        p_project_id: selected.id,
-        p_amount: amt,
-      })
-      if (fnErr) throw fnErr
-      setSelected(null)
-      setAmount('')
-      // refresh investments
-      const { data: inv } = await supabase.from('investments').select('*').eq('user_id', user.id)
-      setMyInvestments((inv as Investment[]) ?? [])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Investment failed.')
+      console.error('Failed to load farm projects:', err)
     } finally {
-      setBusy(false)
+      setLoading(false)
     }
   }
 
-  if (loading) return <Loader full />
+  useEffect(() => {
+    fetchFarms()
+  }, [])
+
+  // Filter & sort logic
+  const filteredFarms = useMemo(() => {
+    let list = [...farms]
+
+    // Category filter
+    if (selectedCategory !== 'All') {
+      const target = selectedCategory.toLowerCase()
+      list = list.filter((f) => {
+        const cat = (f.category || '').toLowerCase()
+        const name = (f.name || '').toLowerCase()
+        if (target.includes('cattle')) {
+          return cat.includes('cattle') || name.includes('cattle') || cat.includes('cow')
+        }
+        if (target.includes('feed')) {
+          return cat.includes('feed') || name.includes('feed') || cat.includes('grain')
+        }
+        if (target.includes('broiler')) {
+          return cat.includes('broiler') || name.includes('broiler') || cat.includes('poultry')
+        }
+        return cat.includes(target)
+      })
+    }
+
+    // Search query filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      list = list.filter(
+        (f) =>
+          f.name.toLowerCase().includes(q) ||
+          f.location.toLowerCase().includes(q) ||
+          f.description.toLowerCase().includes(q) ||
+          f.category.toLowerCase().includes(q)
+      )
+    }
+
+    // Sort order
+    list.sort((a, b) => {
+      if (sortBy === 'roi') {
+        return b.expected_return_pct - a.expected_return_pct
+      }
+      if (sortBy === 'duration') {
+        return a.duration_months - b.duration_months
+      }
+      if (sortBy === 'min_amount') {
+        return a.min_amount - b.min_amount
+      }
+      return 0
+    })
+
+    return list
+  }, [farms, selectedCategory, searchQuery, sortBy])
+
+  // Handle direct investment booking
+  const handleConfirmInvest = async (projectId: string, amount: number): Promise<boolean> => {
+    if (!user) {
+      navigate('/signin')
+      return false
+    }
+
+    const { error: fnErr } = await supabase.rpc('create_investment', {
+      p_project_id: projectId,
+      p_amount: amount,
+    })
+
+    if (fnErr) throw fnErr
+
+    // Refresh wallet and farm projects
+    await refreshProfile()
+    await fetchFarms()
+
+    setNotification(`Successfully allocated ${formatUGX(amount)} to program.`)
+    setTimeout(() => setNotification(null), 5000)
+    return true
+  }
+
+  const categoryOptions = [
+    { key: 'All', label: 'All Programs', icon: '🌱' },
+    { key: 'Cattle', label: 'Cattle Investment', icon: '🐄' },
+    { key: 'Feeds', label: 'Animal Feeds', icon: '🌾' },
+    { key: 'Broilers', label: 'Broilers', icon: '🐔' },
+  ]
 
   return (
-    <div>
-      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-display text-3xl font-semibold text-forest-950">Farm Opportunities</h1>
-          <p className="mt-1 text-ink-600">Vetted livestock operations with transparent terms.</p>
-        </div>
-        <Link to="/dashboard" className="text-sm font-medium text-forest-700 hover:underline">
-          ← Back to dashboard
-        </Link>
-      </header>
+    <AppLayout
+      activeTab="marketplace"
+      onQuickDeposit={() => navigate('/dashboard?tab=wallet')}
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* Banner Alert for quick feedback */}
+        {notification && (
+          <div className="rounded-2xl bg-forest-900 text-white p-4 shadow-md flex items-center justify-between gap-3 animate-fade-up">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="h-5 w-5 text-gold-400 shrink-0" />
+              <p className="text-sm font-semibold">{notification}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setNotification(null)}
+              className="text-xs text-stone-300 hover:text-white"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
-      <div className="mb-6 flex flex-wrap gap-2">
-        {categories.map((c) => (
-          <button
-            key={c}
-            onClick={() => setCategory(c)}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-              category === c
-                ? 'bg-forest-800 text-white'
-                : 'bg-white text-ink-600 ring-1 ring-clay-200 hover:ring-forest-400'
-            }`}
-          >
-            {c}
-          </button>
-        ))}
+        {/* Hero Header */}
+        <div className="relative rounded-3xl overflow-hidden bg-forest-950 text-white p-6 sm:p-10 shadow-lg border border-forest-900">
+          <div className="relative z-10 max-w-2xl space-y-3">
+            <div className="inline-flex items-center gap-2 rounded-full bg-forest-800/80 px-3 py-1 text-xs font-semibold text-gold-300 border border-gold-500/30">
+              <ShieldCheck className="h-3.5 w-3.5 text-gold-400" />
+              <span>Vetted Agribusiness Opportunities</span>
+            </div>
+            <h1 className="font-display text-2xl sm:text-4xl font-bold tracking-tight text-white">
+              Agricultural Investment Programs
+            </h1>
+            <p className="text-sm sm:text-base text-stone-300 leading-relaxed">
+              Directly fund high-performing operations in Cattle breeding, precision Animal Feed
+              production, and bio-secure Broiler poultry with fixed periodic yields and asset-backed
+              collateral.
+            </p>
+          </div>
+
+          {/* Decorative background glows */}
+          <div className="absolute -right-20 -bottom-20 w-80 h-80 rounded-full bg-forest-700/30 blur-3xl" />
+          <div className="absolute right-40 top-0 w-60 h-60 rounded-full bg-gold-600/10 blur-2xl" />
+        </div>
+
+        {/* Filter Controls Bar */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-stone-200/80 shadow-xs">
+          {/* Category Tabs */}
+          <div className="flex flex-wrap items-center gap-2">
+            {categoryOptions.map((cat) => (
+              <button
+                key={cat.key}
+                id={`filter-cat-${cat.key}`}
+                type="button"
+                onClick={() => setSelectedCategory(cat.key)}
+                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs sm:text-sm font-semibold transition-all ${
+                  selectedCategory === cat.key
+                    ? 'bg-forest-800 text-white shadow-xs'
+                    : 'bg-stone-50 text-ink-600 hover:bg-stone-100 hover:text-forest-900 border border-stone-200/70'
+                }`}
+              >
+                <span>{cat.icon}</span>
+                <span>{cat.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Search Input & Sort Dropdown */}
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1 sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-500" />
+              <input
+                id="input-search-farms"
+                type="text"
+                placeholder="Search programs or regions..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-xl border border-stone-200 bg-stone-50 py-2 pl-9 pr-4 text-xs sm:text-sm text-ink-900 placeholder-ink-400 focus:border-forest-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-forest-600/20"
+              />
+            </div>
+
+            <div className="relative shrink-0">
+              <select
+                id="select-sort-programs"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs sm:text-sm font-medium text-ink-700 focus:border-forest-600 focus:outline-none"
+              >
+                <option value="roi">Highest ROI %</option>
+                <option value="duration">Shortest Duration</option>
+                <option value="min_amount">Lowest Min. Amount</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Loading State Skeleton */}
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3].map((n) => (
+              <div
+                key={n}
+                className="h-96 rounded-2xl border border-stone-200 bg-white p-5 animate-pulse space-y-4"
+              >
+                <div className="h-48 rounded-xl bg-stone-200" />
+                <div className="h-5 w-3/4 rounded-md bg-stone-200" />
+                <div className="h-4 w-1/2 rounded-md bg-stone-100" />
+                <div className="h-16 rounded-xl bg-stone-100" />
+              </div>
+            ))}
+          </div>
+        ) : filteredFarms.length === 0 ? (
+          /* Empty Search / Filter State */
+          <div className="rounded-3xl border border-dashed border-stone-300 bg-white p-12 text-center space-y-4">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-forest-50 text-forest-800">
+              <Sprout className="h-7 w-7" />
+            </div>
+            <div className="max-w-md mx-auto">
+              <h3 className="font-display text-lg font-bold text-forest-950">
+                No investment programs found
+              </h3>
+              <p className="text-xs sm:text-sm text-ink-600 mt-1">
+                {searchQuery
+                  ? `No programs matched "${searchQuery}". Try modifying your search or clearing category filters.`
+                  : 'There are currently no active investment opportunities in this category.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('')
+                setSelectedCategory('All')
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-forest-800 px-4 py-2 text-xs font-semibold text-white hover:bg-forest-700"
+            >
+              Reset Filters
+            </button>
+          </div>
+        ) : (
+          /* Program Cards Grid */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredFarms.map((project) => (
+              <InvestmentCard
+                key={project.id}
+                project={project}
+                onSelect={(p) => setSelectedFarm(p)}
+                onInvestNow={(p) => setSelectedFarm(p)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
-      {visible.length === 0 ? (
-        <div className="rounded-2xl bg-white p-12 text-center ring-1 ring-clay-200">
-          <p className="text-ink-600">No active farm opportunities right now. Check back soon.</p>
-        </div>
-      ) : (
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {visible.map((f) => {
-            const fundedPct = f.target_amount > 0 ? Math.min(100, (f.funded_amount / f.target_amount) * 100) : 0
-            return (
-              <article key={f.id} className="overflow-hidden rounded-2xl bg-white ring-1 ring-clay-200 transition hover:ring-forest-400">
-                <div className="relative h-48">
-                  <img src={f.image_url} alt={f.name} className="h-full w-full object-cover" />
-                  <span className="absolute left-3 top-3 rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-forest-800 backdrop-blur">
-                    {f.category}
-                  </span>
-                  <span
-                    className={`absolute right-3 top-3 rounded-full px-3 py-1 text-xs font-medium backdrop-blur ${
-                      f.status === 'active' ? 'bg-forest-700/90 text-white' : 'bg-clay-500/90 text-white'
-                    }`}
-                  >
-                    {f.status}
-                  </span>
-                </div>
-                <div className="space-y-4 p-5">
-                  <div>
-                    <h3 className="font-display text-lg font-semibold text-forest-950">{f.name}</h3>
-                    <p className="mt-0.5 text-sm text-ink-500">📍 {f.location}</p>
-                  </div>
-                  <p className="line-clamp-2 text-sm text-ink-600">{f.description}</p>
-                  <div className="grid grid-cols-3 gap-2 rounded-xl bg-clay-100 p-3 text-center">
-                    <div>
-                      <p className="text-[11px] uppercase tracking-wide text-ink-500">Return</p>
-                      <p className="text-sm font-semibold text-forest-800">{f.expected_return_pct}% p.a.</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-wide text-ink-500">Duration</p>
-                      <p className="text-sm font-semibold text-forest-950">{f.duration_months} months</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-wide text-ink-500">Min.</p>
-                      <p className="text-sm font-semibold text-forest-950">{formatEUR(f.min_amount)}</p>
-                    </div>
-                  </div>
-                  <Progress pct={fundedPct} />
-                  <div className="flex gap-2 pt-1">
-                    <Button
-                      variant="ghost"
-                      className="flex-1 py-2.5 text-sm"
-                      onClick={() => {
-                        setSelected(f)
-                        setError('')
-                      }}
-                    >
-                      View Details
-                    </Button>
-                    <Button
-                      className="flex-1 py-2.5 text-sm"
-                      onClick={() => {
-                        setSelected(f)
-                        setError('')
-                      }}
-                    >
-                      Invest Now
-                    </Button>
-                  </div>
-                </div>
-              </article>
-            )
-          })}
-        </div>
-      )}
-
-      {myInvestments.length > 0 && (
-        <section className="mt-12">
-          <h2 className="font-display text-xl font-semibold text-forest-950">Your investments</h2>
-          <div className="mt-4 space-y-3">
-            {myInvestments.map((inv) => {
-              const farm = farms.find((f) => f.id === inv.farm_id)
-              return (
-                <div key={inv.id} className="flex items-center justify-between rounded-xl bg-white p-4 ring-1 ring-clay-200">
-                  <div className="flex items-center gap-3">
-                    {farm && <img src={farm.image_url} alt="" className="h-10 w-10 rounded-lg object-cover" />}
-                    <div>
-                      <p className="font-medium text-forest-950">{farm?.name ?? 'Farm project'}</p>
-                      <p className="text-xs text-ink-500">{inv.status}</p>
-                    </div>
-                  </div>
-                  <p className="font-semibold text-forest-800">{formatEUR(inv.amount)}</p>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Invest modal */}
-      {selected && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-forest-950/50 p-4 backdrop-blur-sm"
-          onClick={() => setSelected(null)}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl animate-fade-up"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-4 flex items-start justify-between">
-              <div>
-                <h3 className="font-display text-xl font-semibold text-forest-950">{selected.name}</h3>
-                <p className="text-sm text-ink-500">📍 {selected.location} · {selected.duration_months} months</p>
-              </div>
-              <button onClick={() => setSelected(null)} className="text-2xl leading-none text-ink-400 hover:text-ink-700">×</button>
-            </div>
-            <img src={selected.image_url} alt="" className="mb-4 h-40 w-full rounded-xl object-cover" />
-            <p className="mb-4 text-sm leading-relaxed text-ink-600">{selected.description}</p>
-            <div className="mb-4 grid grid-cols-3 gap-2 rounded-xl bg-clay-100 p-3 text-center text-sm">
-              <div>
-                <p className="text-[11px] uppercase text-ink-500">Expected</p>
-                <p className="font-semibold text-forest-800">{selected.expected_return_pct}% p.a.</p>
-              </div>
-              <div>
-                <p className="text-[11px] uppercase text-ink-500">Min</p>
-                <p className="font-semibold">{formatEUR(selected.min_amount)}</p>
-              </div>
-              <div>
-                <p className="text-[11px] uppercase text-ink-500">Max</p>
-                <p className="font-semibold">{selected.max_amount ? formatEUR(selected.max_amount) : '—'}</p>
-              </div>
-            </div>
-            <Input
-              label={`Amount (min ${formatEUR(selected.min_amount)})`}
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder={String(selected.min_amount)}
-            />
-            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-            <div className="mt-4 flex gap-2">
-              <Button variant="ghost" className="flex-1 py-2.5" onClick={() => setSelected(null)}>
-                Cancel
-              </Button>
-              <Button className="flex-1 py-2.5" onClick={invest} disabled={busy}>
-                {busy ? 'Processing…' : 'Confirm Investment'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+      {/* Detail / Investment Modal with Timeline and Schedule Simulator */}
+      <InvestmentDetailModal
+        project={selectedFarm}
+        wallet={wallet}
+        isOpen={Boolean(selectedFarm)}
+        onClose={() => setSelectedFarm(null)}
+        onConfirmInvest={handleConfirmInvest}
+        onGoToDeposit={() => navigate('/dashboard?tab=wallet')}
+      />
+    </AppLayout>
   )
 }
