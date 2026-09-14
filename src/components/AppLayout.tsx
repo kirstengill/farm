@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../state/auth'
 import { formatUGX } from '../lib/format'
+import { isAdminProfile } from '../lib/auth'
 import { Logo } from './Logo'
 
 interface AppLayoutProps {
@@ -38,6 +39,7 @@ export default function AppLayout({
   const isMarketplace = location.pathname === '/marketplace'
   const isDashboard = location.pathname === '/dashboard'
   const isAdmin = location.pathname === '/admin'
+  const userIsAdmin = isAdminProfile(profile)
 
   const handleNavClick = (key: string, path?: string) => {
     if (path) {
@@ -173,7 +175,7 @@ export default function AppLayout({
           </nav>
 
           {/* Admin link if user has admin privileges */}
-          {profile?.is_admin && (
+          {userIsAdmin && (
             <div className="pt-2">
               <span className="px-3 text-[10px] font-bold uppercase tracking-wider text-ink-500">
                 Administration

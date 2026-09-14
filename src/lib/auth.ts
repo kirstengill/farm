@@ -8,10 +8,16 @@ import type { Profile, Wallet } from './types'
  * The real login identifier is always the username.
  */
 
-const emailFromUsername = (username: string) =>
-  `${username.toLowerCase().replace(/[^a-z0-9_]/g, '_')}@users.feldwert.de`
+const normalizeLocalPart = (username: string) =>
+  username.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '') || 'user'
+
+const emailFromUsername = (username: string) => `${normalizeLocalPart(username)}@example.com`
+const legacyEmailFromUsername = (username: string) => `${normalizeLocalPart(username)}@users.feldwert.de`
 
 export const normalizeUsername = (u: string) => u.trim().toLowerCase()
+
+export const isAdminProfile = (profile: Partial<Profile> | null | undefined) =>
+  Boolean(profile && (profile.role === 'admin' || profile.is_admin === true))
 
 export async function signUpWithUsername(opts: {
   username: string
@@ -36,19 +42,29 @@ export async function signUpWithUsername(opts: {
     },
   })
   if (error) throw error
+
+  if (data.session) {
+    const { error: bonusError } = await supabase.rpc('award_signup_bonus')
+    if (bonusError) throw bonusError
+  }
+
   return data
 }
 
 export async function signInWithUsername(username: string, password: string) {
   const uname = normalizeUsername(username)
-  // Sign in directly with the synthesized email
-  const email = emailFromUsername(uname)
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-  if (error) {
-    // fall back: maybe user registered with a legacy style email
+  const candidates = [emailFromUsername(uname), legacyEmailFromUsername(uname)]
+
+  for (const email of candidates) {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (!error) return data
+    if (error.message.toLowerCase().includes('invalid login credentials')) {
+      continue
+    }
     throw error
   }
-  return data
+
+  throw new Error('Invalid username or password.')
 }
 
 export async function getProfile(userId: string): Promise<Profile | null> {
@@ -61,7 +77,7 @@ export async function getProfile(userId: string): Promise<Profile | null> {
   if (data) {
     return {
       ...data,
-      is_admin: (data as any).role === 'admin' || (data as any).is_admin || (data as any).username === 'admin',
+      is_admin: isAdminProfile(data as Profile),
     } as Profile
   }
   return data as Profile | null
@@ -87,8 +103,12 @@ export async function signOut() {
  */
 export async function resetPassword(username: string): Promise<string> {
   const uname = normalizeUsername(username)
-  const email = emailFromUsername(uname)
-  const { error } = await supabase.auth.resetPasswordForEmail(email)
-  if (error) throw new Error('No recovery address found for this username. Contact support.')
-  return `Recovery link sent to the address registered for “${uname}”.`
+  const candidates = [emailFromUsername(uname), legacyEmailFromUsername(uname)]
+
+  for (const email of candidates) {
+    const { error } = await supabase.auth.resetPasswordForEmail(email)
+    if (!error) return `Recovery link sent to the address registered for “${uname}”.`
+  }
+
+  throw new Error('No recovery address found for this username. Contact support.')
 }

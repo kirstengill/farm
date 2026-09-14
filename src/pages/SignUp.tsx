@@ -46,7 +46,7 @@ export default function SignUp() {
     const p = formData.password
     if (!p) return { score: 0, label: '', color: 'bg-stone-200' }
     let score = 0
-    if (p.length >= 8) score += 1
+    if (p.length >= 6) score += 1
     if (/[A-Z]/.test(p) || /[a-z]/.test(p)) score += 1
     if (/[0-9]/.test(p)) score += 1
     if (/[^A-Za-z0-9]/.test(p) || p.length >= 12) score += 1
@@ -81,16 +81,16 @@ export default function SignUp() {
       setError('Username must be at least 3 characters.')
       return
     }
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-      setError('Username may only contain letters, numbers, and underscores.')
+    if (/\s/.test(username)) {
+      setError('Username cannot contain spaces.')
       return
     }
     if (!phone) {
       setError('Please enter your mobile phone number for verification.')
       return
     }
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters long.')
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long.')
       return
     }
     if (password !== confirmPassword) {
@@ -279,7 +279,7 @@ export default function SignUp() {
                   autoComplete="new-password"
                   value={formData.password}
                   onChange={(e) => updateField('password', e.target.value)}
-                  placeholder="Minimum 8 characters"
+                  placeholder="Minimum 6 characters"
                   required
                   className="w-full pl-10 pr-12 py-3 rounded-xl border border-stone-200 bg-[#fafbfa] text-stone-900 placeholder:text-stone-400 focus:bg-white focus:outline-none focus:border-forest-700 focus:ring-4 focus:ring-forest-700/10 transition-all text-base sm:text-sm"
                 />

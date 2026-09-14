@@ -323,6 +323,101 @@ begin
           jsonb_build_object('type', tx.type, 'amount', tx.amount));
 end $$;
 
+-- One-time welcome bonus for newly created accounts
+create or replace function public.award_signup_bonus()
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid();
+  bonus_amount numeric := 5000;
+  wallet_row public.wallets%rowtype;
+begin
+  if uid is null then raise exception 'Not authenticated'; end if;
+
+  insert into public.wallets (user_id, balance, total_invested, total_returns, updated_at)
+  values (uid, 0, 0, 0, now())
+  on conflict (user_id) do nothing;
+
+  select * into wallet_row from public.wallets where user_id = uid for update;
+
+  if not exists (
+    select 1 from public.transactions t
+    where t.user_id = uid
+      and t.type = 'adjustment'
+      and t.meta ? 'signup_bonus'
+  ) then
+    update public.wallets
+      set balance = balance + bonus_amount, updated_at = now()
+      where user_id = uid;
+
+    insert into public.transactions (user_id, type, amount, status, reference, method, meta)
+    values (
+      uid,
+      'adjustment',
+      bonus_amount,
+      'completed',
+      'BONUS-' || left(md5(random()::text), 8),
+      'wallet',
+      jsonb_build_object('signup_bonus', true, 'reason', 'welcome_bonus', 'bonus_type', 'initial_account_bonus')
+    );
+  end if;
+
+  return jsonb_build_object('awarded', true, 'balance', (select balance from public.wallets where user_id = uid));
+end $$;
+
+-- Credit daily investment rewards once per investment per calendar day
+create or replace function public.credit_daily_investment_rewards()
+returns void
+language plpgsql security definer set search_path = public as $$
+declare inv record; reward_amount numeric; reward_day text;
+begin
+  reward_day := to_char(current_date, 'YYYY-MM-DD');
+
+  for inv in
+    select i.id, i.user_id, i.farm_id, i.amount, i.status, p.expected_return_pct, p.duration_months
+    from public.investments i
+    join public.farm_projects p on p.id = i.farm_id
+    where i.status = 'active'
+  loop
+    if not exists (
+      select 1
+      from public.transactions t
+      where t.user_id = inv.user_id
+        and t.type = 'return'
+        and t.meta->>'investment_id' = inv.id::text
+        and t.meta->>'reward_day' = reward_day
+    ) then
+      reward_amount := round(
+        inv.amount * (inv.expected_return_pct / 100.0) / nullif(inv.duration_months * 30, 0),
+        2
+      );
+
+      if coalesce(reward_amount, 0) > 0 then
+        update public.wallets
+          set balance = balance + reward_amount,
+              total_returns = total_returns + reward_amount,
+              updated_at = now()
+          where user_id = inv.user_id;
+
+        insert into public.transactions (user_id, type, amount, status, reference, method, meta)
+        values (
+          inv.user_id,
+          'return',
+          reward_amount,
+          'completed',
+          'REWARD-' || left(inv.id::text, 8) || '-' || reward_day,
+          'wallet',
+          jsonb_build_object(
+            'investment_id', inv.id,
+            'farm_id', inv.farm_id,
+            'reward_day', reward_day,
+            'source', 'daily_reward'
+          )
+        );
+      end if;
+    end if;
+  end loop;
+end $$;
+
 -- User invests in a farm project (deducts wallet, creates investment + tx + progress)
 create or replace function public.create_investment(p_project_id uuid, p_amount numeric)
 returns uuid

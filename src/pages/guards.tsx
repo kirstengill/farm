@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../state/auth'
 import { Loader } from '../components/ui'
+import { isAdminProfile } from '../lib/auth'
 
 export function RequireUser({ children }: { children: ReactNode }) {
   const { user, profile, loading } = useAuth()
@@ -20,6 +21,6 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
   }, [loading])
   if (loading || !checked) return <Loader full />
   if (!user) return <Navigate to="/signin" replace />
-  if (!profile?.is_admin) return <Navigate to="/dashboard" replace />
+  if (!isAdminProfile(profile)) return <Navigate to="/dashboard" replace />
   return <>{children}</>
 }

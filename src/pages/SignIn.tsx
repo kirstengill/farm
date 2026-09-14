@@ -12,7 +12,7 @@ import {
   KeyRound,
 } from 'lucide-react'
 import AuthLayout from './AuthLayout'
-import { signInWithUsername, resetPassword } from '../lib/auth'
+import { signInWithUsername, resetPassword, getProfile, isAdminProfile } from '../lib/auth'
 
 export default function SignIn() {
   const navigate = useNavigate()
@@ -43,10 +43,18 @@ export default function SignIn() {
 
     setLoading(true)
     try {
-      await signInWithUsername(cleanUsername, password)
+      const session = await signInWithUsername(cleanUsername, password)
+      const userId = session?.user?.id
+      if (!userId) {
+        throw new Error('Authentication succeeded but the user profile could not be loaded.')
+      }
+
+      const profile = await getProfile(userId)
+      const targetPath = isAdminProfile(profile) ? '/admin' : '/dashboard'
+
       setSuccess(true)
       setTimeout(() => {
-        navigate('/dashboard')
+        navigate(targetPath)
       }, 500)
     } catch (err: any) {
       const rawMsg = err?.message || ''

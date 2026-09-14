@@ -1044,6 +1044,98 @@ export const mockSupabase = {
       return { data: null, error: null }
     }
 
+    if (fnName === 'award_signup_bonus') {
+      if (!userId) return { data: null, error: { message: 'Not authenticated' } }
+
+      let wallet = state.wallets.find((w) => w.user_id === userId)
+      if (!wallet) {
+        wallet = {
+          user_id: userId,
+          balance: 0,
+          total_invested: 0,
+          total_returns: 0,
+          updated_at: new Date().toISOString(),
+        }
+        state.wallets.push(wallet)
+      }
+
+      const alreadyAwarded = state.transactions.some(
+        (t) => t.user_id === userId && t.type === 'adjustment' && String((t.meta as any)?.signup_bonus) === 'true'
+      )
+
+      if (!alreadyAwarded) {
+        wallet.balance += 5000
+        wallet.updated_at = new Date().toISOString()
+        state.transactions.unshift({
+          id: `tx-bonus-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          user_id: userId,
+          type: 'adjustment',
+          amount: 5000,
+          status: 'completed',
+          reference: `BONUS-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+          method: 'wallet',
+          meta: { signup_bonus: true, reason: 'welcome_bonus', bonus_type: 'initial_account_bonus' },
+          created_at: new Date().toISOString(),
+        })
+      }
+
+      saveState(state)
+      return { data: { awarded: true, balance: wallet.balance }, error: null }
+    }
+
+    if (fnName === 'credit_daily_investment_rewards') {
+      if (!userId) return { data: null, error: { message: 'Not authenticated' } }
+      const dayKey = new Date().toISOString().slice(0, 10)
+
+      for (const investment of state.investments.filter((inv) => inv.user_id === userId && inv.status === 'active')) {
+        const farm = state.farm_projects.find((f) => f.id === investment.farm_id)
+        if (!farm) continue
+
+        const alreadyCredited = state.transactions.some(
+          (t) =>
+            t.user_id === userId &&
+            t.type === 'return' &&
+            String((t.meta as any)?.investment_id) === String(investment.id) &&
+            String((t.meta as any)?.reward_day) === dayKey
+        )
+
+        if (alreadyCredited) continue
+
+        const reward = Math.round(
+          (investment.amount * (farm.expected_return_pct || 12)) /
+            (100 * (farm.duration_months || 1) * 30)
+        )
+        if (reward <= 0) continue
+
+        const wallet = state.wallets.find((w) => w.user_id === userId)
+        if (wallet) {
+          wallet.balance += reward
+          wallet.total_returns += reward
+          wallet.updated_at = new Date().toISOString()
+        }
+
+        state.transactions.unshift({
+          id: `tx-reward-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          user_id: userId,
+          type: 'return',
+          amount: reward,
+          status: 'completed',
+          reference: `REWARD-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+          method: 'wallet',
+          meta: {
+            investment_id: investment.id,
+            farm_id: farm.id,
+            reward_day: dayKey,
+            source: 'daily_reward',
+          },
+          created_at: new Date().toISOString(),
+        })
+      }
+
+      saveState(state)
+      return { data: { ok: true }, error: null }
+    }
+
     if (fnName === 'create_investment') {
       if (!userId) return { data: null, error: { message: 'Not authenticated' } }
       const p_project_id = args?.p_project_id
