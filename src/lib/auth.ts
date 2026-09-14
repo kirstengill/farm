@@ -16,8 +16,22 @@ const legacyEmailFromUsername = (username: string) => `${normalizeLocalPart(user
 
 export const normalizeUsername = (u: string) => u.trim().toLowerCase()
 
+const asBooleanFlag = (value: unknown) =>
+  value === true || value === 'true' || value === 1 || value === '1'
+
 export const isAdminProfile = (profile: Partial<Profile> | null | undefined) =>
-  Boolean(profile && (profile.role === 'admin' || profile.is_admin === true))
+  Boolean(profile && (profile.role === 'admin' || asBooleanFlag((profile as any).is_admin)))
+
+export async function getAdminStatus(userId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('role, is_admin')
+    .eq('id', userId)
+    .maybeSingle()
+
+  if (error || !data) return false
+  return Boolean(data.role === 'admin' || asBooleanFlag((data as any).is_admin))
+}
 
 export async function signUpWithUsername(opts: {
   username: string

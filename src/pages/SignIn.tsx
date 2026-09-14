@@ -12,7 +12,7 @@ import {
   KeyRound,
 } from 'lucide-react'
 import AuthLayout from './AuthLayout'
-import { signInWithUsername, resetPassword, getProfile, isAdminProfile } from '../lib/auth'
+import { signInWithUsername, resetPassword, getProfile, getAdminStatus } from '../lib/auth'
 
 export default function SignIn() {
   const navigate = useNavigate()
@@ -50,7 +50,8 @@ export default function SignIn() {
       }
 
       const profile = await getProfile(userId)
-      const targetPath = isAdminProfile(profile) ? '/admin' : '/dashboard'
+      const looksAdmin = profile ? Boolean(profile.role === 'admin' || profile.is_admin === true) : await getAdminStatus(userId)
+      const targetPath = looksAdmin ? '/admin' : '/dashboard'
 
       setSuccess(true)
       setTimeout(() => {
