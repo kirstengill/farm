@@ -15,11 +15,14 @@ import {
   ExternalLink,
   Info,
   Layers,
+  Mail,
+  MessageCircle,
   Lock,
   PiggyBank,
   Plus,
   RefreshCw,
   Search,
+  Send,
   Share2,
   ShieldCheck,
   Smartphone,
@@ -70,6 +73,7 @@ export default function Dashboard() {
   const [copiedCode, setCopiedCode] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
   const [shareToast, setShareToast] = useState('')
+  const [shareMenuOpen, setShareMenuOpen] = useState(false)
   const [referredUsers, setReferredUsers] = useState<Profile[]>([])
 
   // Keep query param in sync
@@ -299,26 +303,51 @@ export default function Dashboard() {
       ? `${window.location.origin}/signup?ref=${referralCode}`
       : `https://feldwert.de/signup?ref=${referralCode}`
 
-  const handleShareReferral = async () => {
+  const shareMessage = `Join me on Feldwert Capital to invest in verified agricultural opportunities. Use my referral invitation link: ${referralLink}`
+
+  const handleShareReferral = () => {
+    setShareMenuOpen(true)
+  }
+
+  const handleNativeShare = async () => {
     const shareData = {
       title: 'Feldwert Capital - Agricultural Investments',
-      text: `Join me on Feldwert Capital to invest in verified agricultural opportunities (cattle breeding, feed production, broiler units) with competitive yields. Use my referral invitation link:`,
+      text: shareMessage,
       url: referralLink,
     }
 
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
+        setShareMenuOpen(false)
         await navigator.share(shareData)
         setShareToast('Invitation shared successfully!')
         setTimeout(() => setShareToast(''), 3500)
       } catch (err: any) {
         if (err.name !== 'AbortError') {
-          handleCopyLink()
+          setShareToast('Unable to open device sharing.')
+          setTimeout(() => setShareToast(''), 3500)
         }
       }
-    } else {
-      handleCopyLink()
     }
+  }
+
+  const handleShareTarget = (target: 'whatsapp' | 'telegram' | 'sms' | 'email') => {
+    const encodedMessage = encodeURIComponent(shareMessage)
+    const targetUrls = {
+      whatsapp: `https://wa.me/?text=${encodedMessage}`,
+      telegram: `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(shareMessage.replace(` ${referralLink}`, ''))}`,
+      sms: `sms:?&body=${encodedMessage}`,
+      email: `mailto:?subject=${encodeURIComponent('Your Feldwert Capital invitation')}&body=${encodedMessage}`,
+    }
+
+    window.open(targetUrls[target], '_blank', 'noopener,noreferrer')
+    setShareMenuOpen(false)
+  }
+
+  const handleOpenReferralSignup = () => {
+    if (!referralCode) return
+    setShareMenuOpen(false)
+    navigate(`/signup?ref=${encodeURIComponent(referralCode)}`)
   }
 
   const handleCopyLink = async () => {
@@ -1741,6 +1770,116 @@ export default function Dashboard() {
               >
                 Close Timeline
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: REFERRAL SHARE OPTIONS ================= */}
+      {shareMenuOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-forest-950/70 backdrop-blur-sm animate-fade"
+          onClick={() => setShareMenuOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl border border-stone-200 animate-fade-up"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="share-referral-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 id="share-referral-title" className="font-display text-xl font-bold text-forest-950">
+                  Share your referral link
+                </h3>
+                <p className="mt-1 text-xs leading-relaxed text-ink-500">
+                  Choose an app to invite someone to Feldwert Capital.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShareMenuOpen(false)}
+                className="rounded-full p-1 text-ink-400 hover:bg-stone-100 hover:text-ink-700"
+                aria-label="Close share options"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => handleShareTarget('whatsapp')}
+                className="flex items-center gap-3 rounded-2xl border border-stone-200 p-3 text-left transition-colors hover:border-emerald-300 hover:bg-emerald-50"
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                  <MessageCircle className="h-5 w-5" />
+                </span>
+                <span className="text-sm font-bold text-forest-950">WhatsApp</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleShareTarget('telegram')}
+                className="flex items-center gap-3 rounded-2xl border border-stone-200 p-3 text-left transition-colors hover:border-sky-300 hover:bg-sky-50"
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
+                  <Send className="h-5 w-5" />
+                </span>
+                <span className="text-sm font-bold text-forest-950">Telegram</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleShareTarget('sms')}
+                className="flex items-center gap-3 rounded-2xl border border-stone-200 p-3 text-left transition-colors hover:border-amber-300 hover:bg-amber-50"
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                  <Smartphone className="h-5 w-5" />
+                </span>
+                <span className="text-sm font-bold text-forest-950">Messages</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleShareTarget('email')}
+                className="flex items-center gap-3 rounded-2xl border border-stone-200 p-3 text-left transition-colors hover:border-rose-300 hover:bg-rose-50"
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100 text-rose-700">
+                  <Mail className="h-5 w-5" />
+                </span>
+                <span className="text-sm font-bold text-forest-950">Email</span>
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => {
+                  handleCopyLink()
+                  setShareMenuOpen(false)
+                }}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-stone-300 px-4 py-2.5 text-xs font-bold text-forest-900 transition-colors hover:bg-stone-50"
+              >
+                <Copy className="h-4 w-4" />
+                Copy link
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenReferralSignup}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gold-500 px-4 py-2.5 text-xs font-bold text-forest-950 transition-colors hover:bg-gold-400"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Open signup page
+              </button>
+              {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
+                <button
+                  type="button"
+                  onClick={handleNativeShare}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-forest-800 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-forest-700"
+                >
+                  <Share2 className="h-4 w-4" />
+                  More sharing options
+                </button>
+              )}
             </div>
           </div>
         </div>
