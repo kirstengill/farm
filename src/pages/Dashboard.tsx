@@ -263,6 +263,8 @@ export default function Dashboard() {
       const { error } = await supabase.rpc('request_funds', {
         p_type: modal,
         p_amount: amt,
+        p_method: paymentProvider === 'mtn' ? 'mtn_mobile_money' : 'airtel_money',
+        p_phone: phoneContact.trim(),
       })
 
       if (error) {

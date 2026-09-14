@@ -7,15 +7,11 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 const hasCredentials = Boolean(
   supabaseUrl &&
     supabaseAnonKey &&
-    supabaseUrl.startsWith('http') &&
+    /^https?:\/\/.+/.test(supabaseUrl) &&
     !supabaseUrl.includes('your-project')
 )
 
-const isLocalPreview =
-  typeof window !== 'undefined' &&
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-
-const shouldUseMock = !hasCredentials || isLocalPreview
+const shouldUseMock = !hasCredentials
 
 if (shouldUseMock) {
   console.info(

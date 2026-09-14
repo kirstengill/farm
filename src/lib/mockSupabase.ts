@@ -784,7 +784,8 @@ export const mockSupabase = {
         status: 'active',
         is_admin: false,
         referral_code: refCode,
-        referred_by: params.options?.data?.referred_by_code || null,
+        referred_by:
+          params.options?.data?.referral_code || params.options?.data?.referred_by_code || null,
         withdrawal_locked_until: null,
         created_at: new Date().toISOString(),
       }

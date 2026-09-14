@@ -31,7 +31,7 @@ export async function signUpWithUsername(opts: {
         username,
         full_name: opts.fullName,
         phone: opts.phone,
-        referred_by_code: opts.referralCode?.trim() || null,
+        referral_code: opts.referralCode?.trim() || null,
       },
     },
   })

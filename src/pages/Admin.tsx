@@ -149,7 +149,7 @@ export default function Admin() {
     try {
       const { error } = await supabase.rpc('admin_review_funds', {
         p_tx_id: tx.id,
-        p_approve: approved,
+        p_action: approved ? 'approve' : 'reject',
       })
 
       if (error) {
@@ -262,7 +262,6 @@ export default function Admin() {
           role: userDraft.role,
           status: userDraft.status,
           referral_code: trimmedReferral || editingUser.referral_code,
-          is_admin: userDraft.role === 'admin',
         })
         .eq('id', editingUser.id)
 

@@ -11,8 +11,7 @@ import {
   Sprout,
   TrendingUp,
 } from 'lucide-react'
-import { supabase, isUsingMock } from '../lib/supabase'
-import { mockSupabase } from '../lib/mockSupabase'
+import { supabase } from '../lib/supabase'
 import { useAuth } from '../state/auth'
 import { formatUGX } from '../lib/format'
 import type { FarmProject, Investment } from '../lib/types'
@@ -35,45 +34,20 @@ export default function Marketplace() {
   // Load farms and user investments
   const fetchFarms = async () => {
     try {
-      const loadFromSource = async (client: typeof supabase) =>
-        client
-          .from('farm_projects')
-          .select('*')
-          .eq('status', 'active')
-          .order('created_at', { ascending: false })
-
-      const { data, error } = await loadFromSource(supabase)
+      const { data, error } = await supabase
+        .from('farm_projects')
+        .select('*')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
 
       if (!error && data && data.length > 0) {
         setFarms(data as FarmProject[])
         return
       }
 
-      if (!isUsingMock) {
-        const fallback = await loadFromSource(mockSupabase as any)
-        if (!fallback.error && fallback.data && fallback.data.length > 0) {
-          setFarms(fallback.data as FarmProject[])
-          return
-        }
-      }
-
       setFarms([])
     } catch (err) {
       console.error('Failed to load farm projects:', err)
-      if (!isUsingMock) {
-        try {
-          const fallback = await (mockSupabase as any)
-            .from('farm_projects')
-            .select('*')
-            .eq('status', 'active')
-            .order('created_at', { ascending: false })
-
-          if (fallback.data && fallback.data.length > 0) {
-            setFarms(fallback.data as FarmProject[])
-            return
-          }
-        } catch {}
-      }
       setFarms([])
     } finally {
       setLoading(false)
