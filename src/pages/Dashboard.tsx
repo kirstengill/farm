@@ -36,7 +36,16 @@ import {
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../state/auth'
 import { formatUGX, formatDate, formatRelativeDays } from '../lib/format'
-import type { Wallet, Investment, Transaction, AppNotification, FarmProject, PlatformSettings, Profile } from '../lib/types'
+import type {
+  Wallet,
+  Investment,
+  Transaction,
+  AppNotification,
+  FarmProject,
+  PlatformSettings,
+  Profile,
+  Referral,
+} from '../lib/types'
 import AppLayout from '../components/AppLayout'
 import FarmImage from '../components/FarmImage'
 import { farmArtFor } from '../lib/farmArt'
@@ -75,6 +84,7 @@ export default function Dashboard() {
   const [shareToast, setShareToast] = useState('')
   const [shareMenuOpen, setShareMenuOpen] = useState(false)
   const [referredUsers, setReferredUsers] = useState<Profile[]>([])
+  const [referrals, setReferrals] = useState<Referral[]>([])
 
   // Keep query param in sync
   useEffect(() => {
@@ -94,7 +104,7 @@ export default function Dashboard() {
   const loadDashboardData = async () => {
     if (!user) return
     try {
-      const [w, inv, t, n, f, s, profilesRes] = await Promise.all([
+      const [w, inv, t, n, f, s, profilesRes, referralsRes] = await Promise.all([
         supabase.from('wallets').select('*').eq('user_id', user.id).maybeSingle(),
         supabase
           .from('investments')
@@ -116,6 +126,11 @@ export default function Dashboard() {
         supabase.from('farm_projects').select('*'),
         getPlatformSettings(),
         supabase.from('profiles').select('*'),
+        supabase
+          .from('referrals')
+          .select('*')
+          .eq('referrer_id', user.id)
+          .order('created_at', { ascending: false }),
       ])
 
       setWallet((w.data as Wallet) ?? null)
@@ -127,17 +142,12 @@ export default function Dashboard() {
         setPlatformSettings(s as PlatformSettings)
       }
       if (profilesRes.data) {
-        const myCode = profile?.referral_code
         const list = (profilesRes.data as Profile[]).filter(
-          (p) =>
-            p.id !== user.id &&
-            p.referred_by &&
-            (p.referred_by === myCode ||
-              p.referred_by === user.id ||
-              p.referred_by === profile?.username)
+          (p) => p.id !== user.id && p.referred_by === user.id
         )
         setReferredUsers(list)
       }
+      setReferrals((referralsRes.data as Referral[]) ?? [])
     } catch (e) {
       console.error('Error loading dashboard data:', e)
     } finally {
@@ -165,14 +175,8 @@ export default function Dashboard() {
     if (profile && user) {
       supabase.from('profiles').select('*').then((res: any) => {
         if (res.data) {
-          const myCode = profile.referral_code
           const list = (res.data as Profile[]).filter(
-            (p) =>
-              p.id !== user.id &&
-              p.referred_by &&
-              (p.referred_by === myCode ||
-                p.referred_by === user.id ||
-                p.referred_by === profile.username)
+            (p) => p.id !== user.id && p.referred_by === user.id
           )
           setReferredUsers(list)
         }
@@ -384,6 +388,19 @@ export default function Dashboard() {
   const totalEarnings = wallet?.total_returns ?? 0
   const totalInvested = wallet?.total_invested ?? 0
   const availableBalance = wallet?.balance ?? 0
+  const referralBonusTransactions = txs.filter(
+    (t) =>
+      t.type === 'referral_bonus' &&
+      (t.status === 'approved' || t.status === 'completed')
+  )
+  const totalReferralEarnings = referralBonusTransactions.reduce(
+    (sum, transaction) => sum + Number(transaction.amount || 0),
+    0
+  )
+  const pendingReferralEarnings = referrals
+    .filter((referral) => referral.status === 'pending')
+    .reduce((sum, referral) => sum + Number(referral.bonus_amount || 0), 0)
+  const activeReferralCount = referrals.filter((referral) => referral.status === 'approved').length
 
   return (
     <AppLayout
@@ -804,7 +821,7 @@ export default function Dashboard() {
                     <span>Referral Program</span>
                   </div>
                   <h4 className="font-display text-lg font-bold text-white">
-                    Earn 5% on Network Allocations
+                    Earn {platformSettings?.referral_bonus_pct ?? 10}% on Approved Deposits
                   </h4>
                   <p className="text-xs text-stone-300">
                     Invite institutional or private agribusiness partners with your unique code.
@@ -1230,46 +1247,42 @@ export default function Dashboard() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
                 <div className="rounded-2xl bg-stone-50 p-4 border border-stone-200">
                   <span className="text-[11px] text-ink-500 font-medium block">
-                    Referred Investors
+                    Total Referrals
                   </span>
                   <div className="font-display text-2xl font-bold text-forest-950 mt-1">
                     {referredUsers.length}
                   </div>
-                  <span className="text-[10px] text-ink-400">Total invited network</span>
+                  <span className="text-[10px] text-ink-400">Registered from your code</span>
                 </div>
 
                 <div className="rounded-2xl bg-stone-50 p-4 border border-stone-200">
                   <span className="text-[11px] text-ink-500 font-medium block">
-                    Commission Rate
+                    Active / Depositing
                   </span>
                   <div className="font-display text-2xl font-bold text-forest-900 mt-1">
-                    {platformSettings?.referral_bonus_pct ?? 10}%
+                    {activeReferralCount}
                   </div>
-                  <span className="text-[10px] text-ink-400">Per funded holding</span>
+                  <span className="text-[10px] text-ink-400">Approved referral records</span>
                 </div>
 
                 <div className="rounded-2xl bg-stone-50 p-4 border border-stone-200">
                   <span className="text-[11px] text-ink-500 font-medium block">
-                    Commissions Earned
+                    Total Referral Earnings
                   </span>
                   <div className="font-display text-2xl font-bold text-emerald-700 mt-1">
-                    {formatUGX(
-                      txs
-                        .filter((t) => t.type === 'referral_bonus')
-                        .reduce((sum, t) => sum + (t.amount || 0), 0)
-                    )}
+                    {formatUGX(totalReferralEarnings)}
                   </div>
                   <span className="text-[10px] text-emerald-600 font-medium">Credited to wallet</span>
                 </div>
 
                 <div className="rounded-2xl bg-stone-50 p-4 border border-stone-200">
                   <span className="text-[11px] text-ink-500 font-medium block">
-                    Payout Records
+                    Pending Earnings
                   </span>
                   <div className="font-display text-2xl font-bold text-gold-600 mt-1">
-                    {txs.filter((t) => t.type === 'referral_bonus').length}
+                    {formatUGX(pendingReferralEarnings)}
                   </div>
-                  <span className="text-[10px] text-ink-400">Successful bonuses</span>
+                  <span className="text-[10px] text-ink-400">Awaiting approval</span>
                 </div>
               </div>
             </div>
@@ -1349,11 +1362,11 @@ export default function Dashboard() {
                   </p>
                 </div>
                 <span className="rounded-full bg-stone-100 text-ink-600 text-xs px-2.5 py-0.5 font-medium">
-                  {txs.filter((t) => t.type === 'referral_bonus').length} payout{txs.filter((t) => t.type === 'referral_bonus').length === 1 ? '' : 's'}
+                  {referralBonusTransactions.length} payout{referralBonusTransactions.length === 1 ? '' : 's'}
                 </span>
               </div>
 
-              {txs.filter((t) => t.type === 'referral_bonus').length === 0 ? (
+              {referralBonusTransactions.length === 0 ? (
                 <p className="text-xs text-ink-500 py-6 text-center">
                   No commission dividends recorded yet. Bonus payouts will appear here automatically when referred investors fund projects.
                 </p>
@@ -1369,9 +1382,7 @@ export default function Dashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-100">
-                      {txs
-                        .filter((t) => t.type === 'referral_bonus')
-                        .map((t) => (
+                      {referralBonusTransactions.map((t) => (
                           <tr key={t.id} className="hover:bg-stone-50/50">
                             <td className="py-3.5 font-mono text-[11px] text-forest-950 font-bold">
                               {t.reference}

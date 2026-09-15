@@ -26,7 +26,7 @@ const LOCK_PRESETS = [
   { label: '30 Days', days: 30 },
 ]
 
-const REF_PRESETS = [5, 10, 15, 20]
+const REF_PRESETS = [10, 15, 20, 25]
 const MIN_WITHDRAWAL_PRESETS = [5000, 10000, 20000, 50000]
 
 export default function AdminPlatformSettings() {
@@ -557,13 +557,13 @@ export default function AdminPlatformSettings() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <div className="flex items-center gap-2">
-                <h4 className="text-sm font-bold text-white">Referral Commission Rate</h4>
+                <h4 className="text-sm font-bold text-white">Referral Bonus Percentage</h4>
                 <span className="rounded-full bg-gold-500/20 border border-gold-500/30 px-2 py-0.5 text-[10px] font-mono text-gold-300 font-bold">
                   Active: {settings?.referral_bonus_pct ?? 10.0}%
                 </span>
               </div>
               <p className="text-xs text-stone-400 mt-0.5">
-                Calculated on qualifying deposits or investments made by referred users.
+                Referrers receive this percentage of each approved deposit made by a referred user. For example, 10% of a UGX 100,000 approved deposit is UGX 10,000.
               </p>
             </div>
           </div>
@@ -579,7 +579,7 @@ export default function AdminPlatformSettings() {
                   step={0.5}
                   value={referralPctInput}
                   onChange={(e) => setReferralPctInput(e.target.value)}
-                  placeholder="e.g. 15"
+                  placeholder="10"
                   className="w-full rounded-xl border border-white/15 bg-white/10 py-2.5 pl-4 pr-10 font-mono text-sm font-bold text-white focus:border-gold-400 focus:outline-none focus:ring-2 focus:ring-gold-400/20"
                 />
                 <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-gold-400">

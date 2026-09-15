@@ -152,7 +152,7 @@ create table if not exists public.platform_settings (
   updated_at timestamptz not null default now()
 );
 insert into public.platform_settings (key, value) values
-  ('referral_bonus_pct', '5'),
+  ('referral_bonus_pct', '10'),
   ('min_deposit', '10000'),
   ('min_withdrawal', '20000'),
   ('withdrawal_lock_days', '3'),

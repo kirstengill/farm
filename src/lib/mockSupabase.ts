@@ -7,6 +7,7 @@ import type {
   Wallet,
   AppNotification,
   VideoItem,
+  Referral,
 } from './types'
 
 // Default seed videos for agricultural fintech investment platform
@@ -247,6 +248,7 @@ interface DBState {
   farm_projects: FarmProject[]
   investments: Investment[]
   transactions: Transaction[]
+  referrals: Referral[]
   notifications: AppNotification[]
   videos: VideoItem[]
   platform_settings: { key: string; value: any; updated_at: string }[]
@@ -380,6 +382,7 @@ function getInitialState(): DBState {
         created_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
       },
     ],
+    referrals: [],
     notifications: [
       {
         id: 'notif-1',
@@ -421,6 +424,7 @@ function loadState(): DBState {
       return init
     }
     const parsed: DBState = JSON.parse(raw)
+    parsed.referrals = parsed.referrals || []
 
     for (const profile of parsed.profiles || []) {
       if (typeof profile.full_name === 'string' && /anthony|mugenyi/i.test(profile.full_name)) {
@@ -775,6 +779,12 @@ export const mockSupabase = {
       state.users.push(newUser)
 
       const refCode = `FW-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
+      const referralCode = String(
+        params.options?.data?.referral_code || params.options?.data?.referred_by_code || ''
+      ).trim()
+      const referrerProfile = state.profiles.find(
+        (profile) => profile.referral_code.toUpperCase() === referralCode.toUpperCase()
+      )
       const newProfile: Profile = {
         id: userId,
         username,
@@ -784,8 +794,7 @@ export const mockSupabase = {
         status: 'active',
         is_admin: false,
         referral_code: refCode,
-        referred_by:
-          params.options?.data?.referral_code || params.options?.data?.referred_by_code || null,
+        referred_by: referrerProfile && referrerProfile.id !== userId ? referrerProfile.id : null,
         withdrawal_locked_until: null,
         created_at: new Date().toISOString(),
       }
@@ -1023,6 +1032,64 @@ export const mockSupabase = {
       if (isApproved && wallet) {
         if (tx.type === 'deposit') {
           wallet.balance += Number(tx.amount)
+
+          const investorProfile = state.profiles.find((profile) => profile.id === tx.user_id)
+          const referrerProfile = investorProfile?.referred_by
+            ? state.profiles.find((profile) => profile.id === investorProfile.referred_by)
+            : null
+          const setting = state.platform_settings.find((row) => row.key === 'referral_bonus_pct')
+          const bonusPct = Math.max(0, Math.min(100, Number(setting?.value ?? 10)))
+          const bonusAmount = Math.round((Number(tx.amount) * bonusPct) / 100)
+          const alreadyPaid = state.transactions.some(
+            (transaction) =>
+              transaction.type === 'referral_bonus' &&
+              String((transaction.meta as any)?.source_deposit_id) === String(tx.id)
+          )
+
+          if (referrerProfile && referrerProfile.id !== tx.user_id) {
+            const referral: Referral = {
+              id: `ref-${tx.id}`,
+              referrer_id: referrerProfile.id,
+              referred_id: tx.user_id,
+              bonus_amount: bonusAmount,
+              status: 'approved',
+              created_at: new Date().toISOString(),
+            }
+            const existingReferral = state.referrals.find(
+              (row) => row.referrer_id === referral.referrer_id && row.referred_id === referral.referred_id
+            )
+            if (existingReferral) {
+              existingReferral.bonus_amount = bonusAmount
+              existingReferral.status = 'approved'
+            } else {
+              state.referrals.unshift(referral)
+            }
+
+            if (bonusAmount > 0 && !alreadyPaid) {
+              const referrerWallet = state.wallets.find((row) => row.user_id === referrerProfile.id)
+              if (referrerWallet) {
+                referrerWallet.balance += bonusAmount
+                referrerWallet.total_returns += bonusAmount
+                referrerWallet.updated_at = new Date().toISOString()
+              }
+              state.transactions.unshift({
+                id: `tx-ref-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                user_id: referrerProfile.id,
+                type: 'referral_bonus',
+                amount: bonusAmount,
+                status: 'completed',
+                reference: `REF-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+                method: 'wallet',
+                meta: {
+                  source_deposit_id: tx.id,
+                  referred_id: tx.user_id,
+                  deposit_amount: Number(tx.amount),
+                  bonus_pct: bonusPct,
+                },
+                created_at: new Date().toISOString(),
+              })
+            }
+          }
         } else if (tx.type === 'withdrawal') {
           wallet.balance = Math.max(0, wallet.balance - Number(tx.amount))
         }
@@ -1198,54 +1265,6 @@ export const mockSupabase = {
         read: false,
         created_at: new Date().toISOString(),
       })
-
-      // Process referral commission dynamically from platform_settings table
-      const investorProfile = state.profiles.find((p) => p.id === userId)
-      if (investorProfile?.referred_by) {
-        const referrerProfile = state.profiles.find(
-          (p) => p.id === investorProfile.referred_by || p.referral_code === investorProfile.referred_by
-        )
-        if (referrerProfile) {
-          const refBonusSetting = state.platform_settings.find((s) => s.key === 'referral_bonus_pct')
-          const refPct = Number(refBonusSetting?.value ?? 10)
-          if (refPct > 0) {
-            const commission = Math.round((p_amount * refPct) / 100)
-            if (commission > 0) {
-              const refWallet = state.wallets.find((w) => w.user_id === referrerProfile.id)
-              if (refWallet) {
-                refWallet.balance += commission
-                refWallet.total_returns = (refWallet.total_returns || 0) + commission
-                refWallet.updated_at = new Date().toISOString()
-              }
-              state.transactions.unshift({
-                id: `tx-ref-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-                user_id: referrerProfile.id,
-                type: 'referral_bonus',
-                amount: commission,
-                status: 'completed',
-                reference: `REF-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
-                method: 'wallet',
-                meta: {
-                  referred_user: investorProfile.username,
-                  investment_amount: p_amount,
-                  commission_pct: refPct,
-                },
-                created_at: new Date().toISOString(),
-              })
-              state.notifications.unshift({
-                id: `notif-${Date.now()}`,
-                user_id: referrerProfile.id,
-                title: 'Referral Dividend Credited',
-                body: `You received a ${refPct}% referral dividend of UGX ${commission.toLocaleString(
-                  'en-US'
-                )} from @${investorProfile.username}'s investment.`,
-                read: false,
-                created_at: new Date().toISOString(),
-              })
-            }
-          }
-        }
-      }
 
       saveState(state)
       return { data: invId, error: null }

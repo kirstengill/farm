@@ -37,12 +37,13 @@ import {
 import { supabase } from '../lib/supabase'
 import { signOut } from '../lib/auth'
 import { formatUGX, formatDate } from '../lib/format'
-import type { Profile, FarmProject, Transaction, AppNotification, PlatformSettings } from '../lib/types'
+import type { Profile, FarmProject, Transaction, AppNotification, PlatformSettings, Referral } from '../lib/types'
 import FarmImage from '../components/FarmImage'
 import { farmArtFor } from '../lib/farmArt'
 import AdminPlatformSettings from '../components/AdminPlatformSettings'
+import { getPlatformSettings } from '../lib/settings'
 
-type Tab = 'overview' | 'requests' | 'farms' | 'users' | 'transactions' | 'settings'
+type Tab = 'overview' | 'requests' | 'farms' | 'users' | 'transactions' | 'referrals' | 'settings'
 type UserRow = Profile & { wallet?: { balance: number; total_invested?: number } }
 
 const initialFarmForm = {
@@ -64,6 +65,8 @@ export default function Admin() {
   const [users, setUsers] = useState<UserRow[]>([])
   const [pending, setPending] = useState<Transaction[]>([])
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([])
+  const [referrals, setReferrals] = useState<Referral[]>([])
+  const [referralBonusPct, setReferralBonusPct] = useState(10)
   const [farms, setFarms] = useState<FarmProject[]>([])
   const [stats, setStats] = useState({
     users: 0,
@@ -89,7 +92,7 @@ export default function Admin() {
 
   const loadData = async () => {
     try {
-      const [u, pendingTx, allTx, f] = await Promise.all([
+      const [u, pendingTx, allTx, f, referralRows, settings] = await Promise.all([
         supabase
           .from('profiles')
           .select('*, wallets(balance, total_invested)')
@@ -105,6 +108,8 @@ export default function Admin() {
           .order('created_at', { ascending: false })
           .limit(50),
         supabase.from('farm_projects').select('*').order('created_at', { ascending: false }),
+        supabase.from('referrals').select('*').order('created_at', { ascending: false }),
+        getPlatformSettings(),
       ])
 
       const usersData = (u.data as UserRow[]) ?? []
@@ -116,6 +121,8 @@ export default function Admin() {
       setPending(pendingTxs)
       setAllTransactions(allTxData)
       setFarms(farmsData)
+      setReferrals((referralRows.data as Referral[]) ?? [])
+      setReferralBonusPct(settings.referral_bonus_pct)
 
       const depositTotal = pendingTxs
         .filter((x) => x.type === 'deposit')
@@ -308,6 +315,17 @@ export default function Admin() {
     )
   })
 
+  const referredProfiles = users.filter((u) => Boolean(u.referred_by))
+  const referralBonusTransactions = allTransactions.filter(
+    (t) =>
+      t.type === 'referral_bonus' &&
+      (t.status === 'approved' || t.status === 'completed')
+  )
+  const totalReferralBonusesPaid = referralBonusTransactions.reduce(
+    (sum, transaction) => sum + Number(transaction.amount || 0),
+    0
+  )
+
   return (
     <div className="min-h-screen bg-[#111713] text-stone-100 flex flex-col antialiased">
       {/* Top Header */}
@@ -393,6 +411,7 @@ export default function Admin() {
               { id: 'farms', label: `Agri Programs (${farms.length})`, icon: Sprout },
               { id: 'users', label: `Investor Directory (${users.length})`, icon: Users },
               { id: 'transactions', label: 'Transaction Audit', icon: Wallet },
+              { id: 'referrals', label: 'Referral Overview', icon: UserCheck },
               { id: 'settings', label: 'System Parameters', icon: Settings },
             ].map((t) => {
               const Icon = t.icon
@@ -1121,7 +1140,110 @@ export default function Admin() {
           </div>
         )}
 
-        {/* ================= TAB 6: SYSTEM SETTINGS ================= */}
+        {/* ================= TAB 6: REFERRAL OVERVIEW ================= */}
+        {tab === 'referrals' && (
+          <div className="space-y-6 animate-fade">
+            <div>
+              <h3 className="font-display text-xl font-bold text-white">Referral Overview</h3>
+              <p className="text-xs text-stone-400 mt-1">
+                Referral relationships and bonus transactions are read from Supabase. Payouts are created by the deposit approval function.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                <span className="text-xs font-semibold uppercase tracking-wider text-stone-400">Total Referrals</span>
+                <div className="mt-3 font-display text-3xl font-bold text-white">{referredProfiles.length}</div>
+              </div>
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/20 p-5">
+                <span className="text-xs font-semibold uppercase tracking-wider text-emerald-300">Referrals With Deposits</span>
+                <div className="mt-3 font-display text-3xl font-bold text-emerald-300">
+                  {new Set(referrals.filter((referral) => referral.status === 'approved').map((referral) => referral.referred_id)).size}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-gold-500/20 bg-gold-950/20 p-5">
+                <span className="text-xs font-semibold uppercase tracking-wider text-gold-300">Total Bonuses Paid</span>
+                <div className="mt-3 font-display text-3xl font-bold text-gold-300">{formatUGX(totalReferralBonusesPaid)}</div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-6 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h4 className="font-display text-lg font-bold text-white">Recent Referral Bonuses</h4>
+                  <p className="text-xs text-stone-400">Credited transactions created by the backend approval flow.</p>
+                </div>
+                <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-stone-300">
+                  {referralBonusTransactions.length} records
+                </span>
+              </div>
+
+              {referralBonusTransactions.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-xs text-stone-400">
+                  No referral bonuses have been credited yet.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-white/10 text-stone-400 font-medium">
+                        <th className="p-3">Referrer</th>
+                        <th className="p-3">Referred User</th>
+                        <th className="p-3 text-right">Deposit Amount</th>
+                        <th className="p-3 text-right">Bonus %</th>
+                        <th className="p-3 text-right">Bonus Amount</th>
+                        <th className="p-3 text-right">Date / Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {referralBonusTransactions.slice(0, 20).map((transaction) => {
+                        const meta = transaction.meta ?? {}
+                        const referredId = typeof meta.referred_id === 'string' ? meta.referred_id : null
+                        const referral = referrals.find(
+                          (row) =>
+                            row.referrer_id === transaction.user_id &&
+                            (!referredId || row.referred_id === referredId)
+                        )
+                        const referredUser = users.find((user) => user.id === (referredId || referral?.referred_id))
+                        const depositValue = meta.deposit_amount
+                        const recordedDeposit =
+                          typeof depositValue === 'number'
+                            ? depositValue
+                            : typeof depositValue === 'string' && depositValue.trim()
+                            ? Number(depositValue)
+                            : null
+                        const percentageValue = meta.bonus_pct
+                        const recordedPercentage =
+                          typeof percentageValue === 'number'
+                            ? percentageValue
+                            : typeof percentageValue === 'string' && percentageValue.trim()
+                            ? Number(percentageValue)
+                            : referralBonusPct
+                        const referrer = users.find((user) => user.id === transaction.user_id)
+
+                        return (
+                          <tr key={transaction.id} className="hover:bg-white/5">
+                            <td className="p-3 font-semibold text-white">{referrer?.username || transaction.user_id}</td>
+                            <td className="p-3 text-stone-300">{referredUser?.username || 'Recorded referral'}</td>
+                            <td className="p-3 text-right text-stone-300">{recordedDeposit !== null ? formatUGX(recordedDeposit) : '—'}</td>
+                            <td className="p-3 text-right text-stone-300">{recordedPercentage}%</td>
+                            <td className="p-3 text-right font-bold text-emerald-300">{formatUGX(transaction.amount)}</td>
+                            <td className="p-3 text-right text-stone-400">
+                              <div>{formatDate(transaction.created_at)}</div>
+                              <span className="text-[10px] font-semibold uppercase text-emerald-300">{transaction.status}</span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ================= TAB 7: SYSTEM SETTINGS ================= */}
         {tab === 'settings' && <AdminPlatformSettings />}
       </div>
     </div>
