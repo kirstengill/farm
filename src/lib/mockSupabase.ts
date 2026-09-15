@@ -889,12 +889,13 @@ export const mockSupabase = {
     const currentUser = getStoredSessionUser()
     const userId = currentUser?.id
 
-    if (fnName === 'request_funds') {
+    if (fnName === 'request_funds' || fnName === 'request_deposit') {
       if (!userId) return { data: null, error: { message: 'Not authenticated' } }
-      const p_type = args?.p_type as 'deposit' | 'withdrawal'
+      const p_type = fnName === 'request_deposit' ? 'deposit' : (args?.p_type as 'deposit' | 'withdrawal')
       const p_amount = Number(args?.p_amount)
       const p_method = (args?.p_method as string) || 'mtn_mobile_money'
       const p_phone = (args?.p_phone as string) || ''
+      const p_reference = (args?.p_reference as string) || ''
 
       if (p_amount <= 0 || isNaN(p_amount)) {
         return { data: null, error: { message: 'Please enter a valid amount greater than UGX 0.' } }
@@ -991,7 +992,9 @@ export const mockSupabase = {
         type: p_type,
         amount: p_amount,
         status: 'pending',
-        reference: `TX-${p_method === 'airtel_money' ? 'AIR' : 'MTN'}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+        reference:
+          p_reference ||
+          `TX-${p_method === 'airtel_money' ? 'AIR' : 'MTN'}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
         method: p_method,
         meta: {
           phone: p_phone,
@@ -1014,7 +1017,10 @@ export const mockSupabase = {
 
       saveState(state)
       return {
-        data: `Request submitted — your ${p_type} of UGX ${p_amount.toLocaleString('en-US')} via ${methodLabel} is pending review.`,
+        data:
+          fnName === 'request_deposit'
+            ? tx
+            : `Request submitted — your ${p_type} of UGX ${p_amount.toLocaleString('en-US')} via ${methodLabel} is pending review.`,
         error: null,
       }
     }

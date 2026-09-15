@@ -76,6 +76,7 @@ export default function Dashboard() {
   const [phoneContact, setPhoneContact] = useState('')
   const [amount, setAmount] = useState('')
   const [msg, setMsg] = useState('')
+  const [successMsg, setSuccessMsg] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const [selectedInvForTimeline, setSelectedInvForTimeline] = useState<Investment | null>(null)
@@ -235,7 +236,7 @@ export default function Dashboard() {
   // Handle deposit or withdrawal request
   const submitWalletOp = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user || !modal) return
+    if (busy || !user || !modal) return
     const amt = parseFloat(amount)
     if (isNaN(amt) || amt <= 0) {
       setErr('Please enter a valid amount greater than 0 UGX.')
@@ -268,27 +269,50 @@ export default function Dashboard() {
     setMsg('')
 
     try {
-      const { error } = await supabase.rpc('request_funds', {
-        p_type: modal,
-        p_amount: amt,
-        p_method: paymentProvider === 'mtn' ? 'mtn_mobile_money' : 'airtel_money',
-        p_phone: phoneContact.trim(),
-      })
+      const method = paymentProvider === 'mtn' ? 'mtn_mobile_money' : 'airtel_money'
+      const clientReference = modal === 'deposit' ? `DEP-${crypto.randomUUID()}` : undefined
+      const rpcName = modal === 'deposit' ? 'request_deposit' : 'request_funds'
+      const rpcPayload =
+        modal === 'deposit'
+          ? {
+              p_amount: amt,
+              p_method: method,
+              p_phone: phoneContact.trim(),
+              p_reference: clientReference,
+            }
+          : {
+              p_type: modal,
+              p_amount: amt,
+              p_method: method,
+              p_phone: phoneContact.trim(),
+            }
+      const { data, error } = await supabase.rpc(rpcName, rpcPayload)
 
       if (error) {
-        setErr(error.message)
+        const errorMessage = error.message || ''
+        setErr(
+          /reference|not-null|constraint/i.test(errorMessage)
+            ? 'We could not create the request. Please try again.'
+            : errorMessage.includes('Minimum')
+            ? errorMessage
+            : 'We could not submit your request. Please check the details and try again.'
+        )
       } else {
         const providerName = paymentProvider === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money'
-        setMsg(
+        const createdReference =
+          modal === 'deposit' && data && typeof data === 'object' && 'reference' in data
+            ? String(data.reference)
+            : clientReference
+        setSuccessMsg(
           `${modal === 'deposit' ? 'Deposit' : 'Withdrawal'} request for ${formatUGX(
             amt
-          )} via ${providerName} submitted! Awaiting settlement confirmation.`
+          )} via ${providerName} submitted${
+            createdReference ? ` with reference ${createdReference}` : ''
+          }. Awaiting settlement confirmation.`
         )
         setAmount('')
-        setTimeout(() => {
-          setModal(null)
-          setMsg('')
-        }, 2500)
+        setModal(null)
+        window.setTimeout(() => setSuccessMsg(''), 6000)
 
         // Reload data
         await loadDashboardData()
@@ -409,6 +433,14 @@ export default function Dashboard() {
       onQuickDeposit={() => setModal('deposit')}
       onQuickWithdraw={() => setModal('withdraw')}
     >
+      {successMsg && (
+        <div className="fixed right-4 top-4 z-[60] max-w-md rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800 shadow-lg">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+            <span>{successMsg}</span>
+          </div>
+        </div>
+      )}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Welcome Header */}
         <div className="flex flex-wrap items-center justify-between gap-4">
