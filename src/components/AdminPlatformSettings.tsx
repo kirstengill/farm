@@ -32,11 +32,12 @@ const MIN_WITHDRAWAL_PRESETS = [5000, 10000, 20000, 50000]
 export default function AdminPlatformSettings() {
   const [settings, setSettings] = useState<PlatformSettings | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
 
   // Local draft edit states
   const [minWithdrawalInput, setMinWithdrawalInput] = useState<string>('')
-  const [withdrawalLockDays, setWithdrawalLockDays] = useState<number>(7)
+  const [withdrawalLockDays, setWithdrawalLockDays] = useState<number>(0)
   const [isCustomDays, setIsCustomDays] = useState(false)
   const [customDaysInput, setCustomDaysInput] = useState<string>('')
   const [referralPctInput, setReferralPctInput] = useState<string>('')
@@ -55,6 +56,7 @@ export default function AdminPlatformSettings() {
 
   const loadSettings = async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const data = await getPlatformSettings()
       setSettings(data)
@@ -72,6 +74,7 @@ export default function AdminPlatformSettings() {
         setCustomDaysInput(String(days))
       }
     } catch (err: any) {
+      setLoadError(err?.message || 'Failed to load platform settings from database.')
       setFeedback({
         section: 'global',
         type: 'error',
@@ -237,6 +240,23 @@ export default function AdminPlatformSettings() {
       <div className="flex flex-col items-center justify-center p-12 text-stone-400 space-y-3">
         <RefreshCw className="h-6 w-6 animate-spin text-emerald-400" />
         <p className="text-xs">Loading platform settings from Supabase database...</p>
+      </div>
+    )
+  }
+
+  if (loadError || !settings) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 text-center text-red-300 space-y-3">
+        <AlertCircle className="h-6 w-6 text-red-400" />
+        <p className="text-xs">{loadError || 'Platform settings are unavailable.'}</p>
+        <button
+          type="button"
+          onClick={loadSettings}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-red-400/40 px-3 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/10"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          Retry
+        </button>
       </div>
     )
   }

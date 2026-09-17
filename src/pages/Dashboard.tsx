@@ -70,6 +70,7 @@ export default function Dashboard() {
   const [notifs, setNotifs] = useState<AppNotification[]>([])
   const [farms, setFarms] = useState<FarmProject[]>([])
   const [platformSettings, setPlatformSettings] = useState<PlatformSettings | null>(null)
+  const [platformSettingsError, setPlatformSettingsError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   // Wallet deposit/withdraw modal state
@@ -145,6 +146,7 @@ export default function Dashboard() {
       setFarms((f.data as FarmProject[]) ?? [])
       if (s) {
         setPlatformSettings(s as PlatformSettings)
+        setPlatformSettingsError(null)
       }
       if (profilesRes.data) {
         const list = (profilesRes.data as Profile[]).filter(
@@ -155,6 +157,7 @@ export default function Dashboard() {
       setReferrals((referralsRes.data as Referral[]) ?? [])
     } catch (e) {
       console.error('Error loading dashboard data:', e)
+      setPlatformSettingsError(e instanceof Error ? e.message : 'Failed to load platform settings.')
     } finally {
       setLoading(false)
     }
@@ -167,6 +170,9 @@ export default function Dashboard() {
     const handleSettingsUpdate = () => {
       getPlatformSettings().then((fresh) => {
         setPlatformSettings(fresh)
+        setPlatformSettingsError(null)
+      }).catch((e) => {
+        setPlatformSettingsError(e instanceof Error ? e.message : 'Failed to load platform settings.')
       })
     }
 
@@ -765,7 +771,11 @@ export default function Dashboard() {
                         </div>
 
                         {/* Claim Status & Lock Indicator */}
-                        {(() => {
+                        {platformSettingsError ? (
+                          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-800">
+                            Unable to load the current withdrawal lock setting: {platformSettingsError}
+                          </div>
+                        ) : platformSettings ? (() => {
                           const lockEnabled = platformSettings?.withdrawal_lock_enabled ?? true
                           const lockDays = lockEnabled ? (platformSettings?.withdrawal_lock_days ?? 0) : 0
                           const returnUnlockDate = new Date(
@@ -820,7 +830,11 @@ export default function Dashboard() {
                               </div>
                             </div>
                           )
-                        })()}
+                        })() : (
+                          <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-[11px] text-stone-600">
+                            Loading the current withdrawal lock setting...
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -1009,11 +1023,27 @@ export default function Dashboard() {
               <div className="space-y-4">
                 {investments.map((inv) => {
                   const farm = farms.find((f) => f.id === inv.farm_id)
+                  if (platformSettingsError || !platformSettings) {
+                    return (
+                      <div
+                        key={inv.id}
+                        className={`rounded-3xl border px-6 py-5 text-xs ${
+                          platformSettingsError
+                            ? 'border-red-200 bg-red-50 text-red-800'
+                            : 'border-stone-200 bg-stone-50 text-stone-600'
+                        }`}
+                      >
+                        {platformSettingsError
+                          ? `Unable to load the current withdrawal lock setting: ${platformSettingsError}`
+                          : 'Loading the current withdrawal lock setting...'}
+                      </div>
+                    )
+                  }
                   const durationMonths = farm?.duration_months || 12
                   const returnPct = farm?.expected_return_pct || 14
                   const daysRemaining = formatRelativeDays(inv.maturity_date)
-                  const lockDays = (platformSettings?.withdrawal_lock_enabled ?? true)
-                    ? (platformSettings?.withdrawal_lock_days ?? 0)
+                  const lockDays = platformSettings.withdrawal_lock_enabled
+                    ? platformSettings.withdrawal_lock_days
                     : 0
                   const returnUnlockDate = new Date(
                     new Date(inv.start_date || inv.created_at).getTime() + lockDays * 86400000

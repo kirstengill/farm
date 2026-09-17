@@ -4,8 +4,8 @@ import type { PlatformSettings } from './types'
 export const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
   min_deposit: 10000,
   min_withdrawal: 10000,
-  withdrawal_lock_days: 7,
-  withdrawal_lock_enabled: true,
+  withdrawal_lock_days: 0,
+  withdrawal_lock_enabled: false,
   currency: 'UGX',
   referral_bonus_pct: 10,
   brand_name: 'Feldwert Capital',
@@ -13,43 +13,34 @@ export const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
 
 /**
  * Retrieves the current platform settings from the Supabase/database source of truth.
- * Parses row-based platform_settings records into a strongly-typed PlatformSettings object.
+ * Reads the canonical platform_settings row.
  */
 export async function getPlatformSettings(): Promise<PlatformSettings> {
   try {
     const { data, error } = await supabase.from('platform_settings').select('*')
-    if (error || !data || !Array.isArray(data) || data.length === 0) {
-      return { ...DEFAULT_PLATFORM_SETTINGS }
+    if (error) {
+      throw new Error(error.message || 'Failed to load platform settings from database.')
     }
 
-    const settings: PlatformSettings = { ...DEFAULT_PLATFORM_SETTINGS }
-    for (const row of data as { key: string; value: any }[]) {
-      const k = row.key
-      const val = row.value
-      if (k === 'min_withdrawal') {
-        const n = Number(val)
-        if (!isNaN(n) && n > 0) settings.min_withdrawal = n
-      } else if (k === 'min_deposit') {
-        const n = Number(val)
-        if (!isNaN(n) && n > 0) settings.min_deposit = n
-      } else if (k === 'referral_bonus_pct') {
-        const n = Number(val)
-        if (!isNaN(n) && n >= 0) settings.referral_bonus_pct = n
-      } else if (k === 'withdrawal_lock_days') {
-        const n = Number(val)
-        if (!isNaN(n) && n >= 0) settings.withdrawal_lock_days = n
-      } else if (k === 'withdrawal_lock_enabled') {
-        settings.withdrawal_lock_enabled = Boolean(val)
-      } else if (k === 'currency') {
-        settings.currency = String(val)
-      } else if (k === 'brand_name') {
-        settings.brand_name = String(val)
-      }
+    const row = Array.isArray(data) ? data[0] : data
+    if (!row) {
+      throw new Error('Platform settings are unavailable.')
     }
-    return settings
+
+    const lockDays = Number(row.withdrawal_lock_days)
+    if (!Number.isFinite(lockDays) || lockDays < 0 || typeof row.withdrawal_lock_enabled !== 'boolean') {
+      throw new Error('Platform settings are missing canonical withdrawal lock values.')
+    }
+
+    return {
+      ...DEFAULT_PLATFORM_SETTINGS,
+      ...row,
+      withdrawal_lock_days: lockDays,
+      withdrawal_lock_enabled: row.withdrawal_lock_enabled,
+    } as PlatformSettings
   } catch (err) {
-    console.warn('[PlatformSettings] Failed to fetch settings from database:', err)
-    return { ...DEFAULT_PLATFORM_SETTINGS }
+    console.error('[PlatformSettings] Failed to fetch settings from database:', err)
+    throw err instanceof Error ? err : new Error('Failed to load platform settings from database.')
   }
 }
 
@@ -62,11 +53,9 @@ export async function savePlatformSetting<K extends keyof PlatformSettings>(
   value: PlatformSettings[K]
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabase.from('platform_settings').upsert({
-      key,
-      value,
-      updated_at: new Date().toISOString(),
-    })
+    const { error } = await supabase
+      .from('platform_settings')
+      .update({ [key]: value, updated_at: new Date().toISOString() })
 
     if (error) {
       return { success: false, error: error.message || 'Failed to save setting to database.' }
