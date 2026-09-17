@@ -1,4 +1,5 @@
 import { farmArtFor } from './farmArt'
+import { calculateInvestmentDailyReturn, computeInvestmentAccrual } from './investmentReturns'
 import type {
   FarmProject,
   Investment,
@@ -120,7 +121,7 @@ const DEFAULT_FARMS: FarmProject[] = [
     max_amount: 25000000,
     expected_return_pct: 16.5,
     duration_months: 12,
-    daily_return: 13.75,
+    daily_return: 11500,
     target_amount: 300000000,
     funded_amount: 215000000,
     created_at: new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(),
@@ -139,7 +140,7 @@ const DEFAULT_FARMS: FarmProject[] = [
     max_amount: 15000000,
     expected_return_pct: 13.8,
     duration_months: 6,
-    daily_return: 11.5,
+    daily_return: 5000,
     target_amount: 180000000,
     funded_amount: 118000000,
     created_at: new Date(Date.now() - 25 * 24 * 3600 * 1000).toISOString(),
@@ -158,7 +159,7 @@ const DEFAULT_FARMS: FarmProject[] = [
     max_amount: 10000000,
     expected_return_pct: 15.2,
     duration_months: 3,
-    daily_return: 33.78,
+    daily_return: 7500,
     target_amount: 140000000,
     funded_amount: 94000000,
     created_at: new Date(Date.now() - 15 * 24 * 3600 * 1000).toISOString(),
@@ -177,7 +178,7 @@ const DEFAULT_FARMS: FarmProject[] = [
     max_amount: 20000000,
     expected_return_pct: 14.0,
     duration_months: 9,
-    daily_return: 15.56,
+    daily_return: 11500,
     target_amount: 220000000,
     funded_amount: 165000000,
     created_at: new Date(Date.now() - 20 * 24 * 3600 * 1000).toISOString(),
@@ -196,7 +197,7 @@ const DEFAULT_FARMS: FarmProject[] = [
     max_amount: 18000000,
     expected_return_pct: 12.5,
     duration_months: 8,
-    daily_return: 7.81,
+    daily_return: 5000,
     target_amount: 160000000,
     funded_amount: 82000000,
     created_at: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString(),
@@ -215,7 +216,7 @@ const DEFAULT_FARMS: FarmProject[] = [
     max_amount: 12000000,
     expected_return_pct: 17.0,
     duration_months: 4,
-    daily_return: 28.33,
+    daily_return: 7500,
     target_amount: 175000000,
     funded_amount: 122500000,
     created_at: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(),
@@ -234,7 +235,7 @@ const DEFAULT_FARMS: FarmProject[] = [
     max_amount: 15000000,
     expected_return_pct: 16.5,
     duration_months: 6,
-    daily_return: 27.5,
+    daily_return: 11500,
     target_amount: 250000000,
     funded_amount: 145000000,
     created_at: new Date(Date.now() - 12 * 24 * 3600 * 1000).toISOString(),
@@ -346,18 +347,39 @@ function getInitialState(): DBState {
         farm_id: 'farm-1',
         amount: 1500000,
         status: 'active',
-        expected_return: 247500,
-        daily_return: 687.5,
+        expected_return: 243540000,
+        daily_return: 676500,
         returns_claimed_through: null,
-        earning_days: 0,
-        accumulated_return: 0,
-        claimable_return: 0,
+        earning_days: 30,
+        accumulated_return: 20295000,
+        locked_return: 0,
+        claimable_return: 20295000,
         claimed_return: 0,
         reference: 'INV-DEMO1',
         start_date: new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(),
         maturity_date: new Date(Date.now() + 335 * 24 * 3600 * 1000).toISOString(),
         created_at: new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(),
         farm: DEFAULT_FARMS[0],
+      },
+      {
+        id: 'inv-demo-2',
+        user_id: demoId,
+        farm_id: 'farm-2',
+        amount: 15000,
+        status: 'active',
+        expected_return: 900000,
+        daily_return: 5000,
+        returns_claimed_through: null,
+        earning_days: 3,
+        accumulated_return: 15000,
+        locked_return: 15000,
+        claimable_return: 0,
+        claimed_return: 0,
+        reference: 'INV-15K-LOCKED',
+        start_date: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
+        maturity_date: new Date(Date.now() + 178 * 24 * 3600 * 1000).toISOString(),
+        created_at: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
+        farm: DEFAULT_FARMS[1],
       },
     ],
     transactions: [
@@ -485,6 +507,51 @@ function loadState(): DBState {
       parsed.videos = [...DEFAULT_VIDEOS]
       modified = true
     }
+
+    // Migrate farm_projects to progressive investment-based daily returns
+    if (parsed.farm_projects) {
+      for (const farm of parsed.farm_projects) {
+        const expectedDaily = calculateInvestmentDailyReturn(farm.min_amount)
+        if (!farm.daily_return || farm.daily_return < 1000 || farm.daily_return !== expectedDaily) {
+          farm.daily_return = expectedDaily
+          modified = true
+        }
+      }
+    }
+
+    // Migrate investments safely to investment-based daily returns and accrual
+    if (parsed.investments) {
+      const lockSetting = parsed.platform_settings?.find((s) => s.key === 'withdrawal_lock_days')
+      const lockEnabledSetting = parsed.platform_settings?.find((s) => s.key === 'withdrawal_lock_enabled')
+      const lockEnabled = lockEnabledSetting ? Boolean(lockEnabledSetting.value) : true
+      const lockDays = lockEnabled ? Math.max(0, Number(lockSetting?.value ?? 7)) : 0
+
+      for (const inv of parsed.investments) {
+        if (inv.status === 'active') {
+          const properDaily = calculateInvestmentDailyReturn(inv.amount)
+          if (!inv.daily_return || inv.daily_return < 1000 || inv.daily_return !== properDaily) {
+            inv.daily_return = properDaily
+            modified = true
+          }
+          const accrual = computeInvestmentAccrual({
+            amount: inv.amount,
+            dailyReturn: inv.daily_return,
+            startDate: inv.start_date || inv.created_at,
+            maturityDate: inv.maturity_date,
+            claimedReturn: inv.claimed_return,
+            lockDays,
+            lockEnabled,
+            currentEarningDays: inv.earning_days,
+          })
+          inv.earning_days = accrual.earningDays
+          inv.accumulated_return = accrual.accumulatedReturn
+          inv.locked_return = accrual.lockedReturn
+          inv.claimable_return = accrual.claimableReturn
+          modified = true
+        }
+      }
+    }
+
     if (modified) {
       saveState(parsed)
     }
@@ -1216,28 +1283,25 @@ export const mockSupabase = {
       const lockSetting = state.platform_settings.find((setting) => setting.key === 'withdrawal_lock_days')
       const lockEnabledSetting = state.platform_settings.find((setting) => setting.key === 'withdrawal_lock_enabled')
       const lockEnabled = lockEnabledSetting ? Boolean(lockEnabledSetting.value) : true
-      const lockDays = lockEnabled ? Math.max(0, Number(lockSetting?.value ?? 0)) : 0
-      const dayMs = 86400000
+      const lockDays = lockEnabled ? Math.max(0, Number(lockSetting?.value ?? 7)) : 0
 
       for (const investment of state.investments.filter((item) => item.status === 'active')) {
-        const farm = state.farm_projects.find((item) => item.id === investment.farm_id)
-        if (!farm) continue
-        const startDay = new Date(investment.start_date || investment.created_at).setHours(0, 0, 0, 0)
-        const currentDay = new Date().setHours(0, 0, 0, 0)
-        const maturityDay = new Date(investment.maturity_date || Date.now()).setHours(0, 0, 0, 0)
-        const daysSinceStart = Math.max(0, Math.floor((Math.min(currentDay, maturityDay) - startDay) / dayMs) + 1)
-        const reward = Number(investment.daily_return || 0)
-        const accumulated = Math.round(reward * daysSinceStart * 100) / 100
+        const accrual = computeInvestmentAccrual({
+          amount: investment.amount,
+          dailyReturn: investment.daily_return,
+          startDate: investment.start_date || investment.created_at,
+          maturityDate: investment.maturity_date,
+          claimedReturn: investment.claimed_return,
+          lockDays,
+          lockEnabled,
+          currentEarningDays: investment.earning_days,
+        })
 
-        investment.earning_days = daysSinceStart
-        investment.accumulated_return = accumulated
-
-        const startTime = new Date(investment.start_date || investment.created_at).getTime()
-        const firstRewardTime = startTime + lockDays * dayMs
-        const isLocked = Date.now() < firstRewardTime
-        investment.claimable_return = isLocked
-          ? 0
-          : Math.max(0, accumulated - Number(investment.claimed_return || 0))
+        investment.daily_return = accrual.dailyReturn
+        investment.earning_days = accrual.earningDays
+        investment.accumulated_return = accrual.accumulatedReturn
+        investment.locked_return = accrual.lockedReturn
+        investment.claimable_return = accrual.claimableReturn
       }
       saveState(state)
       return { data: { ok: true }, error: null }
@@ -1257,35 +1321,35 @@ export const mockSupabase = {
       const lockSetting = state.platform_settings.find((setting) => setting.key === 'withdrawal_lock_days')
       const lockEnabledSetting = state.platform_settings.find((setting) => setting.key === 'withdrawal_lock_enabled')
       const lockEnabled = lockEnabledSetting ? Boolean(lockEnabledSetting.value) : true
-      const lockDays = lockEnabled ? Math.max(0, Number(lockSetting?.value ?? 0)) : 0
-      const startTime = new Date(investment.start_date || investment.created_at).getTime()
-      const firstRewardTime = startTime + lockDays * 86400000
+      const lockDays = lockEnabled ? Math.max(0, Number(lockSetting?.value ?? 7)) : 0
 
-      if (Date.now() < firstRewardTime) {
+      const accrual = computeInvestmentAccrual({
+        amount: investment.amount,
+        dailyReturn: investment.daily_return,
+        startDate: investment.start_date || investment.created_at,
+        maturityDate: investment.maturity_date,
+        claimedReturn: investment.claimed_return,
+        lockDays,
+        lockEnabled,
+        currentEarningDays: investment.earning_days,
+      })
+
+      investment.daily_return = accrual.dailyReturn
+      investment.earning_days = accrual.earningDays
+      investment.accumulated_return = accrual.accumulatedReturn
+      investment.locked_return = accrual.lockedReturn
+      investment.claimable_return = accrual.claimableReturn
+
+      if (accrual.isLocked) {
         return {
           data: null,
           error: {
-            message: `Returns claim locked until ${new Date(firstRewardTime).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}.`,
+            message: `Returns claim locked until ${accrual.unlockDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}.`,
           },
         }
       }
 
-      const reward = Number(investment.daily_return || 0)
-      if (reward <= 0) return { data: 0, error: null }
-
-      const dayMs = 86400000
-      const startDay = new Date(investment.start_date || investment.created_at).setHours(0, 0, 0, 0)
-      const currentDay = new Date().setHours(0, 0, 0, 0)
-      const maturityDay = new Date(investment.maturity_date || Date.now()).setHours(0, 0, 0, 0)
-      const daysSinceStart = Math.max(0, Math.floor((Math.min(currentDay, maturityDay) - startDay) / dayMs) + 1)
-      investment.earning_days = daysSinceStart
-      investment.accumulated_return = Math.round(reward * daysSinceStart * 100) / 100
-
-      const claimableAmount = Math.max(
-        0,
-        Math.round((investment.accumulated_return - Number(investment.claimed_return || 0)) * 100) / 100
-      )
-
+      const claimableAmount = accrual.claimableReturn
       if (claimableAmount <= 0) {
         return { data: 0, error: { message: 'No new daily returns available to claim at this time.' } }
       }
@@ -1301,6 +1365,7 @@ export const mockSupabase = {
       investment.returns_claimed_through = claimedThrough
       investment.claimed_return = Number(investment.claimed_return || 0) + claimableAmount
       investment.claimable_return = 0
+      investment.locked_return = 0
 
       state.transactions.unshift({
         id: `tx-reward-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -1314,15 +1379,63 @@ export const mockSupabase = {
           investment_id: investment.id,
           farm_id: farm.id,
           farm_name: farm.name,
-          daily_return: reward,
-          earning_days: daysSinceStart,
+          daily_return: accrual.dailyReturn,
+          earning_days: accrual.earningDays,
           source: 'daily_reward_claim',
         },
         created_at: new Date().toISOString(),
       })
 
+      state.notifications.unshift({
+        id: `notif-${Date.now()}`,
+        user_id: userId,
+        title: 'Daily Returns Claimed',
+        body: `Successfully claimed UGX ${claimableAmount.toLocaleString('en-US')} in accumulated returns to your wallet.`,
+        read: false,
+        created_at: new Date().toISOString(),
+      })
+
       saveState(state)
       return { data: claimableAmount, error: null }
+    }
+
+    if (fnName === 'simulate_investment_earning_days') {
+      if (!userId) return { data: null, error: { message: 'Not authenticated' } }
+      const inv = state.investments.find((i) => i.id === args?.p_investment_id)
+      if (!inv) return { data: null, error: { message: 'Investment not found' } }
+
+      const addDays = Number(args?.p_additional_days) || 1
+      inv.earning_days = (inv.earning_days || 1) + addDays
+
+      if (args?.advance_lock) {
+        const prevStart = new Date(inv.start_date || inv.created_at).getTime()
+        inv.start_date = new Date(prevStart - addDays * 86400000).toISOString()
+      }
+
+      const lockSetting = state.platform_settings.find((s) => s.key === 'withdrawal_lock_days')
+      const lockEnabledSetting = state.platform_settings.find((s) => s.key === 'withdrawal_lock_enabled')
+      const lockEnabled = lockEnabledSetting ? Boolean(lockEnabledSetting.value) : true
+      const lockDays = lockEnabled ? Math.max(0, Number(lockSetting?.value ?? 7)) : 0
+
+      const accrual = computeInvestmentAccrual({
+        amount: inv.amount,
+        dailyReturn: inv.daily_return,
+        startDate: inv.start_date || inv.created_at,
+        maturityDate: inv.maturity_date,
+        claimedReturn: inv.claimed_return,
+        lockDays,
+        lockEnabled,
+        currentEarningDays: inv.earning_days,
+      })
+
+      inv.daily_return = accrual.dailyReturn
+      inv.earning_days = accrual.earningDays
+      inv.accumulated_return = accrual.accumulatedReturn
+      inv.locked_return = accrual.lockedReturn
+      inv.claimable_return = accrual.claimableReturn
+
+      saveState(state)
+      return { data: inv, error: null }
     }
 
     if (fnName === 'create_investment') {
@@ -1342,15 +1455,11 @@ export const mockSupabase = {
       }
 
       const invId = `inv-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
-      const dailyReturn = Number(
-        farm.daily_return && farm.min_amount > 0
-          ? Math.round(farm.daily_return * (p_amount / farm.min_amount) * 100) / 100
-          : Math.round(
-              (p_amount * (farm.expected_return_pct || 14)) /
-                (100 * (farm.duration_months || 1) * 30) * 100
-            ) / 100
-      )
-      const expReturn = Math.round(dailyReturn * (farm.duration_months || 1) * 30 * 100) / 100
+      // Calculate progressive daily return based on invested amount
+      const dailyReturn = calculateInvestmentDailyReturn(p_amount)
+      const durationMonths = farm.duration_months || 12
+      const expReturn = Math.round(dailyReturn * durationMonths * 30 * 100) / 100
+
       wallet.balance -= p_amount
       wallet.total_invested += p_amount
       wallet.updated_at = new Date().toISOString()
@@ -1359,6 +1468,27 @@ export const mockSupabase = {
       if (farm.target_amount > 0 && farm.funded_amount >= farm.target_amount) {
         farm.status = 'funded'
       }
+
+      const lockSetting = state.platform_settings.find((s) => s.key === 'withdrawal_lock_days')
+      const lockEnabledSetting = state.platform_settings.find((s) => s.key === 'withdrawal_lock_enabled')
+      const lockEnabled = lockEnabledSetting ? Boolean(lockEnabledSetting.value) : true
+      const lockDays = lockEnabled ? Math.max(0, Number(lockSetting?.value ?? 7)) : 0
+
+      const startDateIso = new Date().toISOString()
+      const maturityDateIso = new Date(Date.now() + durationMonths * 30 * 24 * 3600 * 1000).toISOString()
+
+      // Initial day 1 accrual
+      const initialAccrual = computeInvestmentAccrual({
+        amount: p_amount,
+        dailyReturn,
+        startDate: startDateIso,
+        maturityDate: maturityDateIso,
+        claimedReturn: 0,
+        lockDays,
+        lockEnabled,
+        currentEarningDays: 1,
+      })
+
       const inv: Investment = {
         id: invId,
         user_id: userId,
@@ -1368,16 +1498,15 @@ export const mockSupabase = {
         expected_return: expReturn,
         daily_return: dailyReturn,
         returns_claimed_through: null,
-        earning_days: 0,
-        accumulated_return: 0,
-        claimable_return: 0,
+        earning_days: initialAccrual.earningDays,
+        accumulated_return: initialAccrual.accumulatedReturn,
+        locked_return: initialAccrual.lockedReturn,
+        claimable_return: initialAccrual.claimableReturn,
         claimed_return: 0,
         reference: `INV-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-        start_date: new Date().toISOString(),
-        maturity_date: new Date(
-          Date.now() + (farm.duration_months || 12) * 30 * 24 * 3600 * 1000
-        ).toISOString(),
-        created_at: new Date().toISOString(),
+        start_date: startDateIso,
+        maturity_date: maturityDateIso,
+        created_at: startDateIso,
         farm,
       }
       state.investments.unshift(inv)

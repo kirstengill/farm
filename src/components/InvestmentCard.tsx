@@ -1,6 +1,7 @@
 import { Calendar, ChevronRight, Coins, MapPin, ShieldCheck, TrendingUp, Users } from 'lucide-react'
 import type { FarmProject } from '../lib/types'
 import { formatUGX } from '../lib/format'
+import { calculateInvestmentDailyReturn } from '../lib/investmentReturns'
 import FarmImage from './FarmImage'
 import { farmArtFor } from '../lib/farmArt'
 
@@ -63,11 +64,12 @@ export default function InvestmentCard({
       : 0
 
   // Use the product's configured daily return at the minimum investment.
-  const refAmount = project.min_amount || 100
+  const refAmount = project.min_amount || 15000
   const durationMonths = project.duration_months || 1
-  const dailyReturnRef = project.daily_return ?? Math.round(
-    (refAmount * project.expected_return_pct) / (100 * durationMonths * 30)
-  )
+  const dailyReturnRef =
+    project.daily_return && project.daily_return >= 1000
+      ? project.daily_return
+      : calculateInvestmentDailyReturn(refAmount)
   const expectedTotalProfit = Math.round(dailyReturnRef * durationMonths * 30 * 100) / 100
   const dailyRatePct = ((dailyReturnRef / refAmount) * 100).toFixed(2)
 

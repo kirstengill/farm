@@ -55,6 +55,7 @@ export interface Investment {
   returns_claimed_through?: string | null
   earning_days?: number
   accumulated_return?: number
+  locked_return?: number
   claimable_return?: number
   claimed_return?: number
   reference: string

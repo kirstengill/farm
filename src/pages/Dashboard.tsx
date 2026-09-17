@@ -18,6 +18,7 @@ import {
   Mail,
   MessageCircle,
   Lock,
+  Unlock,
   PiggyBank,
   Plus,
   RefreshCw,
@@ -36,6 +37,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../state/auth'
 import { formatUGX, formatDate, formatRelativeDays } from '../lib/format'
+import { calculateInvestmentDailyReturn } from '../lib/investmentReturns'
 import type {
   Wallet,
   Investment,
@@ -323,6 +325,33 @@ export default function Dashboard() {
     }
   }
 
+  const [simulatingId, setSimulatingId] = useState<string | null>(null)
+
+  const simulateAccrual = async (investment: Investment, advanceLock: boolean = false) => {
+    if (simulatingId) return
+    setSimulatingId(investment.id)
+    setErr('')
+    try {
+      const { error } = await supabase.rpc('simulate_investment_earning_days', {
+        p_investment_id: investment.id,
+        p_additional_days: 1,
+        advance_lock: advanceLock,
+      })
+      if (error) throw error
+      await loadDashboardData()
+      setSuccessMsg(
+        advanceLock
+          ? `Simulated 1 day elapsed and unlocked returns for ${investment.reference}!`
+          : `Simulated +1 day accrual (+${formatUGX(investment.daily_return)}) for ${investment.reference}. Returns accumulated!`
+      )
+      window.setTimeout(() => setSuccessMsg(''), 4500)
+    } catch (e: any) {
+      setErr(e.message || 'Failed to simulate accrual')
+    } finally {
+      setSimulatingId(null)
+    }
+  }
+
   const referralCode = profile?.referral_code || ''
   const referralLink =
     typeof window !== 'undefined'
@@ -410,6 +439,28 @@ export default function Dashboard() {
   const totalEarnings = wallet?.total_returns ?? 0
   const totalInvested = wallet?.total_invested ?? 0
   const availableBalance = wallet?.balance ?? 0
+
+  const totalAccumulatedReturns = activeInvestments.reduce(
+    (sum, inv) => sum + Number(inv.accumulated_return || 0),
+    0
+  )
+  const totalLockedReturns = activeInvestments.reduce(
+    (sum, inv) => sum + Number(inv.locked_return ?? 0),
+    0
+  )
+  const totalClaimableReturns = activeInvestments.reduce(
+    (sum, inv) => sum + Number(inv.claimable_return ?? 0),
+    0
+  )
+  const totalClaimedReturns = activeInvestments.reduce(
+    (sum, inv) => sum + Number(inv.claimed_return ?? 0),
+    0
+  )
+  const totalDailyReturnRunRate = activeInvestments.reduce(
+    (sum, inv) => sum + Number(inv.daily_return ?? 0),
+    0
+  )
+
   const referralBonusTransactions = txs.filter(
     (t) =>
       t.type === 'referral_bonus' &&

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import type { FarmProject, Wallet } from '../lib/types'
 import { formatUGX, formatDate } from '../lib/format'
+import { calculateInvestmentDailyReturn } from '../lib/investmentReturns'
 import FarmImage from './FarmImage'
 import { farmArtFor } from '../lib/farmArt'
 import InvestmentScheduleTimeline from './InvestmentScheduleTimeline'
@@ -46,19 +47,13 @@ export default function InvestmentDetailModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
-  // Calculations from backend parameters
-  const returnPct = project.expected_return_pct || 14
+  // Progressive investment-based daily return calculation
   const durationMonths = project.duration_months || 12
-  const configuredDailyReturn = project.daily_return ?? Math.round(
-    (minAmt * returnPct) / (100 * durationMonths * 30)
-  )
-  const calcDailyReturn = Math.round(configuredDailyReturn * (investAmount / minAmt) * 100) / 100
+  const calcDailyReturn = calculateInvestmentDailyReturn(investAmount)
   const calcTotalReturn = Math.round(calcDailyReturn * durationMonths * 30 * 100) / 100
   const calcTotalPayout = investAmount + calcTotalReturn
-  const calcMonthlyReturn =
-    durationMonths > 0
-      ? Math.round((calcTotalReturn / durationMonths) * 100) / 100
-      : 0
+  const returnPct = investAmount > 0 ? Math.round((calcTotalReturn / investAmount) * 100 * 100) / 100 : 0
+  const calcMonthlyReturn = Math.round(calcDailyReturn * 30 * 100) / 100
   const dailyRatePct = investAmount > 0 ? ((calcDailyReturn / investAmount) * 100).toFixed(2) : '0.00'
 
   const startDate = new Date().toISOString()
@@ -241,7 +236,9 @@ export default function InvestmentDetailModal({
 
                 {/* Quick Presets */}
                 <div className="flex flex-wrap gap-2 pt-1">
-                  {[minAmt, minAmt * 2, 500000, 1000000, maxAmt].map((preset) => (
+                  {Array.from(new Set([minAmt, 15000, 20000, 50000, 100000, 500000, maxAmt]))
+                    .filter((amt) => amt >= minAmt && amt <= maxAmt)
+                    .map((preset) => (
                     <button
                       key={preset}
                       type="button"

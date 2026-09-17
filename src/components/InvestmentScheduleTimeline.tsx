@@ -1,5 +1,6 @@
 import { ArrowRight, Calendar, CheckCircle2, Clock, Coins, DollarSign, TrendingUp } from 'lucide-react'
 import { formatUGX, formatDate } from '../lib/format'
+import { calculateInvestmentDailyReturn } from '../lib/investmentReturns'
 
 interface TimelineProps {
   amount: number
@@ -24,10 +25,9 @@ export default function InvestmentScheduleTimeline({
   compact = false,
   className = '',
 }: TimelineProps) {
-  const calcTotalReturn = totalReturn ?? Math.round(((amount * returnPct) / 100) * 100) / 100
-  const calcDailyReturn =
-    dailyReturn ??
-    (durationMonths > 0 ? Math.round((calcTotalReturn / (durationMonths * 30)) * 100) / 100 : 0)
+  const calcDailyReturn = dailyReturn ?? calculateInvestmentDailyReturn(amount)
+  const calcTotalReturn =
+    totalReturn ?? Math.round(calcDailyReturn * Math.max(1, durationMonths) * 30 * 100) / 100
 
   const sDate = startDate ? new Date(startDate) : new Date()
   const cDate = completionDate
