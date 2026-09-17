@@ -15,6 +15,7 @@ import {
   Filter,
   Layers,
   LayoutDashboard,
+  Loader2,
   Lock,
   LogOut,
   Plus,
@@ -98,6 +99,7 @@ export default function Admin() {
   } | null>(null)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [actionBusy, setActionBusy] = useState(false)
+  const [processingTx, setProcessingTx] = useState<{ id: string; action: 'approve' | 'reject' } | null>(null)
   const [searchUser, setSearchUser] = useState('')
   const [filterReqType, setFilterReqType] = useState<'all' | 'deposit' | 'withdrawal'>('all')
   const [editingUser, setEditingUser] = useState<UserRow | null>(null)
@@ -131,7 +133,19 @@ export default function Admin() {
         getPlatformSettings(),
       ])
 
-      const usersData = (u.data as UserRow[]) ?? []
+      const rawUsers = (u.data as any[]) ?? []
+      const usersData: UserRow[] = rawUsers.map((user) => {
+        const walletObj = Array.isArray(user.wallets)
+          ? user.wallets[0]
+          : user.wallets || user.wallet || { balance: 0, total_invested: 0 }
+        return {
+          ...user,
+          wallet: {
+            balance: Number(walletObj?.balance ?? 0),
+            total_invested: Number(walletObj?.total_invested ?? 0),
+          },
+        }
+      })
       const pendingTxs = (pendingTx.data as Transaction[]) ?? []
       const allTxData = (allTx.data as Transaction[]) ?? []
       const farmsData = (f.data as FarmProject[]) ?? []
@@ -169,29 +183,202 @@ export default function Admin() {
     loadData()
   }, [])
 
-  // Review pending funds request (deposit or withdrawal)
+  // Review pending funds request (deposit or withdrawal) with instant optimistic UI & resilient fallback
   const handleReviewRequest = async (tx: Transaction, approved: boolean) => {
+    if (processingTx?.id === tx.id) return
+    const action = approved ? 'approve' : 'reject'
+    setProcessingTx({ id: tx.id, action })
     setActionBusy(true)
+
+    const targetStatus = approved ? 'approved' : 'rejected'
+
+    // 1. Optimistic UI update: instantly update local state so user sees immediate results
+    setPending((prev) => prev.filter((p) => p.id !== tx.id && p.reference !== tx.reference))
+    setAllTransactions((prev) =>
+      prev.map((p) =>
+        p.id === tx.id || p.reference === tx.reference ? { ...p, status: targetStatus } : p
+      )
+    )
+    setStats((prev) => ({
+      ...prev,
+      pendingDeposits:
+        tx.type === 'deposit'
+          ? Math.max(0, prev.pendingDeposits - Number(tx.amount || 0))
+          : prev.pendingDeposits,
+      pendingWithdrawals:
+        tx.type === 'withdrawal'
+          ? Math.max(0, prev.pendingWithdrawals - Number(tx.amount || 0))
+          : prev.pendingWithdrawals,
+    }))
+
     try {
-      const { error } = await supabase.rpc('admin_review_funds', {
+      let rpcErr: any = null
+
+      // Attempt 1: Call RPC with UUID
+      const res1 = await supabase.rpc('admin_review_funds', {
         p_tx_id: tx.id,
-        p_action: approved ? 'approve' : 'reject',
+        p_action: action,
+      })
+      rpcErr = res1.error
+
+      // Attempt 2: If failed and reference differs, try with reference
+      if (rpcErr && tx.reference && tx.reference !== tx.id) {
+        const res2 = await supabase.rpc('admin_review_funds', {
+          p_tx_id: tx.reference,
+          p_action: action,
+        })
+        if (!res2.error) {
+          rpcErr = null
+        }
+      }
+
+      // 2. Direct database / store fallback ONLY if RPC failed or was unavailable
+      if (rpcErr) {
+        console.warn('[Admin] RPC admin_review_funds returned error, attempting fallback update:', rpcErr)
+
+        // Update transaction row
+        let { error: txErr } = await supabase
+          .from('transactions')
+          .update({ status: targetStatus, updated_at: new Date().toISOString() })
+          .eq('id', tx.id)
+
+        if (txErr && tx.reference) {
+          const refRes = await supabase
+            .from('transactions')
+            .update({ status: targetStatus, updated_at: new Date().toISOString() })
+            .eq('reference', tx.reference)
+          txErr = refRes.error
+        }
+
+        if (txErr) {
+          console.error('[Admin] Fallback transaction update also failed:', txErr)
+          throw new Error(
+            rpcErr?.message ||
+              txErr?.message ||
+              `Could not ${action} transaction in Supabase. Please run the migration script.`
+          )
+        }
+
+        // If approving a deposit, credit the investor's wallet
+        if (approved && tx.type === 'deposit') {
+          const { data: walletRow } = await supabase
+            .from('wallets')
+            .select('*')
+            .eq('user_id', tx.user_id)
+            .maybeSingle()
+
+          const curBal = Number(walletRow?.balance || 0)
+          const newBal = curBal + Number(tx.amount || 0)
+
+          if (walletRow) {
+            await supabase
+              .from('wallets')
+              .update({ balance: newBal, updated_at: new Date().toISOString() })
+              .eq('user_id', tx.user_id)
+          } else {
+            await supabase.from('wallets').insert({
+              user_id: tx.user_id,
+              balance: newBal,
+              total_invested: 0,
+              total_returns: 0,
+              updated_at: new Date().toISOString(),
+            })
+          }
+
+          // Check if user has a referrer to award referral bonus
+          try {
+            const { data: profileRow } = await supabase
+              .from('profiles')
+              .select('id, referred_by')
+              .eq('id', tx.user_id)
+              .maybeSingle()
+
+            if (profileRow?.referred_by && profileRow.referred_by !== tx.user_id) {
+              const bonusPct = referralBonusPct || 10
+              const bonusAmt = Math.round((Number(tx.amount || 0) * bonusPct) / 100)
+
+              if (bonusAmt > 0) {
+                const { data: refWallet } = await supabase
+                  .from('wallets')
+                  .select('*')
+                  .eq('user_id', profileRow.referred_by)
+                  .maybeSingle()
+
+                if (refWallet) {
+                  await supabase
+                    .from('wallets')
+                    .update({
+                      balance: Number(refWallet.balance || 0) + bonusAmt,
+                      total_returns: Number(refWallet.total_returns || 0) + bonusAmt,
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq('user_id', profileRow.referred_by)
+                }
+              }
+            }
+          } catch (refErr) {
+            console.warn('[Admin] Referral bonus processing error in fallback:', refErr)
+          }
+        } else if (approved && tx.type === 'withdrawal') {
+          const { data: walletRow } = await supabase
+            .from('wallets')
+            .select('*')
+            .eq('user_id', tx.user_id)
+            .maybeSingle()
+
+          if (walletRow) {
+            const curBal = Number(walletRow.balance || 0)
+            const newBal = Math.max(0, curBal - Number(tx.amount || 0))
+            await supabase
+              .from('wallets')
+              .update({ balance: newBal, updated_at: new Date().toISOString() })
+              .eq('user_id', tx.user_id)
+          }
+        }
+
+        // Insert notification for the user
+        try {
+          await supabase.from('notifications').insert({
+            user_id: tx.user_id,
+            title: approved
+              ? `${tx.type === 'deposit' ? 'Deposit' : 'Withdrawal'} Approved`
+              : `${tx.type === 'deposit' ? 'Deposit' : 'Withdrawal'} Rejected`,
+            body: approved
+              ? `Your ${tx.type} of UGX ${Number(tx.amount || 0).toLocaleString('en-US')} has been approved and credited.`
+              : `Your ${tx.type} request for UGX ${Number(tx.amount || 0).toLocaleString('en-US')} was reviewed and rejected.`,
+            read: false,
+            created_at: new Date().toISOString(),
+          })
+        } catch {}
+      }
+
+      // Notify all dashboards and tabs that funds/status updated
+      try {
+        window.dispatchEvent(
+          new CustomEvent('wallet-balance-updated', {
+            detail: { userId: tx.user_id, amount: tx.amount, action },
+          })
+        )
+        window.dispatchEvent(new Event('storage'))
+      } catch {}
+
+      setMsg({
+        type: 'success',
+        text: approved
+          ? `Request #${tx.reference} for ${formatUGX(tx.amount)} successfully APPROVED & CREDITED.`
+          : `Request #${tx.reference} for ${formatUGX(tx.amount)} successfully REJECTED.`,
       })
 
-      if (error) {
-        setMsg({ type: 'error', text: error.message })
-      } else {
-        setMsg({
-          type: 'success',
-          text: `Request #${tx.reference} successfully ${approved ? 'APPROVED' : 'REJECTED'}.`,
-        })
-        await loadData()
-      }
+      // Re-sync all state from the database
+      await loadData()
     } catch (err: any) {
-      setMsg({ type: 'error', text: err.message || 'Operation failed.' })
+      console.error('handleReviewRequest error:', err)
+      setMsg({ type: 'error', text: err?.message || 'Operation failed. Please try again.' })
+      await loadData()
     } finally {
+      setProcessingTx(null)
       setActionBusy(false)
-      setTimeout(() => setMsg(null), 4000)
+      setTimeout(() => setMsg(null), 5000)
     }
   }
 
@@ -697,6 +884,19 @@ export default function Admin() {
                             {formatUGX(t.amount)}
                           </span>
                         </div>
+                        {((t.meta as any)?.phone || (t.meta as any)?.mobile_number || (t.meta as any)?.sender_phone) && (
+                          <div className="mt-1 flex items-center gap-1.5 text-xs">
+                            <span className="text-stone-400">Number:</span>
+                            <span className="font-mono font-semibold text-emerald-300 bg-white/10 px-1.5 py-0.5 rounded text-[11px]">
+                              {String((t.meta as any)?.phone || (t.meta as any)?.mobile_number || (t.meta as any)?.sender_phone)}
+                            </span>
+                            {((t.meta as any)?.provider || t.method) && (
+                              <span className="text-[10px] text-stone-400">
+                                ({String((t.meta as any)?.provider || t.method).replace('_', ' ')})
+                              </span>
+                            )}
+                          </div>
+                        )}
                         <p className="text-xs text-stone-400 mt-0.5">
                           Ref: <span className="font-mono text-stone-300">{t.reference}</span> ·{' '}
                           {formatDate(t.created_at)}
@@ -706,21 +906,29 @@ export default function Admin() {
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          disabled={actionBusy}
+                          disabled={processingTx?.id === t.id}
                           onClick={() => handleReviewRequest(t, true)}
-                          className="inline-flex items-center gap-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-3.5 py-1.5 text-xs font-bold text-white transition-colors disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-3.5 py-1.5 text-xs font-bold text-white transition-colors disabled:opacity-50"
                         >
-                          <Check className="h-3.5 w-3.5" />
-                          <span>Approve</span>
+                          {processingTx?.id === t.id && processingTx.action === 'approve' ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Check className="h-3.5 w-3.5" />
+                          )}
+                          <span>{processingTx?.id === t.id && processingTx.action === 'approve' ? 'Approving...' : 'Approve'}</span>
                         </button>
                         <button
                           type="button"
-                          disabled={actionBusy}
+                          disabled={processingTx?.id === t.id}
                           onClick={() => handleReviewRequest(t, false)}
-                          className="inline-flex items-center gap-1 rounded-xl bg-red-600/80 hover:bg-red-600 px-3.5 py-1.5 text-xs font-bold text-white transition-colors disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-red-600/80 hover:bg-red-600 px-3.5 py-1.5 text-xs font-bold text-white transition-colors disabled:opacity-50"
                         >
-                          <X className="h-3.5 w-3.5" />
-                          <span>Reject</span>
+                          {processingTx?.id === t.id && processingTx.action === 'reject' ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <X className="h-3.5 w-3.5" />
+                          )}
+                          <span>{processingTx?.id === t.id && processingTx.action === 'reject' ? 'Rejecting...' : 'Reject'}</span>
                         </button>
                       </div>
                     </div>
@@ -774,7 +982,7 @@ export default function Admin() {
                     key={t.id}
                     className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/5 p-5 hover:border-white/20 transition-all"
                   >
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       <div className="flex items-center gap-2">
                         <span
                           className={`rounded-full px-2.5 py-0.5 text-xs font-bold uppercase ${
@@ -792,6 +1000,19 @@ export default function Admin() {
                           Status: Pending
                         </span>
                       </div>
+                      {((t.meta as any)?.phone || (t.meta as any)?.mobile_number || (t.meta as any)?.sender_phone) && (
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="text-stone-300 font-medium">Depositor Mobile Number:</span>
+                          <span className="font-mono font-bold text-emerald-300 bg-emerald-950/80 border border-emerald-700/60 px-2.5 py-0.5 rounded-lg text-xs tracking-wide">
+                            {String((t.meta as any)?.phone || (t.meta as any)?.mobile_number || (t.meta as any)?.sender_phone)}
+                          </span>
+                          {((t.meta as any)?.provider || t.method) && (
+                            <span className="text-[11px] text-stone-300 bg-white/10 px-2 py-0.5 rounded-lg">
+                              {String((t.meta as any)?.provider || t.method).replace('_', ' ')}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <p className="text-xs text-stone-400">
                         Reference Code: <span className="font-mono text-gold-300">{t.reference}</span> ·
                         Date: {formatDate(t.created_at)}
@@ -801,19 +1022,29 @@ export default function Admin() {
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
-                        disabled={actionBusy}
+                        disabled={processingTx?.id === t.id}
                         onClick={() => handleReviewRequest(t, true)}
-                        className="rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-xs font-bold text-white shadow-xs disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors disabled:opacity-50"
                       >
-                        Approve & Credit
+                        {processingTx?.id === t.id && processingTx.action === 'approve' ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Check className="h-4 w-4" />
+                        )}
+                        <span>{processingTx?.id === t.id && processingTx.action === 'approve' ? 'Approving & Crediting...' : 'Approve & Credit'}</span>
                       </button>
                       <button
                         type="button"
-                        disabled={actionBusy}
+                        disabled={processingTx?.id === t.id}
                         onClick={() => handleReviewRequest(t, false)}
-                        className="rounded-xl bg-red-600/80 hover:bg-red-600 px-4 py-2 text-xs font-bold text-white shadow-xs disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-red-600/80 hover:bg-red-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors disabled:opacity-50"
                       >
-                        Reject Request
+                        {processingTx?.id === t.id && processingTx.action === 'reject' ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <X className="h-4 w-4" />
+                        )}
+                        <span>{processingTx?.id === t.id && processingTx.action === 'reject' ? 'Rejecting...' : 'Reject Request'}</span>
                       </button>
                     </div>
                   </div>
@@ -1562,6 +1793,7 @@ export default function Admin() {
                 <thead>
                   <tr className="border-b border-white/10 text-stone-400 font-medium">
                     <th className="p-4">Reference</th>
+                    <th className="p-4">Mobile Number</th>
                     <th className="p-4">Type</th>
                     <th className="p-4">Date</th>
                     <th className="p-4 text-right">Amount</th>
@@ -1572,6 +1804,19 @@ export default function Admin() {
                   {allTransactions.map((t) => (
                     <tr key={t.id} className="hover:bg-white/5">
                       <td className="p-4 font-mono text-stone-300">{t.reference}</td>
+                      <td className="p-4 font-mono text-emerald-300 text-[11px]">
+                        {String(
+                          (t.meta as any)?.phone ||
+                            (t.meta as any)?.mobile_number ||
+                            (t.meta as any)?.sender_phone ||
+                            '—'
+                        )}
+                        {((t.meta as any)?.provider || t.method) && (
+                          <span className="block text-[10px] text-stone-400 font-sans">
+                            {String((t.meta as any)?.provider || t.method).replace('_', ' ')}
+                          </span>
+                        )}
+                      </td>
                       <td className="p-4 font-bold text-white capitalize">
                         {t.type.replace('_', ' ')}
                       </td>
@@ -1580,17 +1825,46 @@ export default function Admin() {
                         {formatUGX(t.amount)}
                       </td>
                       <td className="p-4 text-right">
-                        <span
-                          className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase ${
-                            t.status === 'approved' || t.status === 'completed'
-                              ? 'bg-emerald-500/20 text-emerald-300'
-                              : t.status === 'pending'
-                              ? 'bg-amber-500/20 text-amber-300'
-                              : 'bg-red-500/20 text-red-300'
-                          }`}
-                        >
-                          {t.status}
-                        </span>
+                        {t.status === 'pending' ? (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              disabled={processingTx?.id === t.id}
+                              onClick={() => handleReviewRequest(t, true)}
+                              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-2.5 py-1 text-[11px] font-bold text-white transition-colors disabled:opacity-50"
+                            >
+                              {processingTx?.id === t.id && processingTx.action === 'approve' ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Check className="h-3 w-3" />
+                              )}
+                              <span>{processingTx?.id === t.id && processingTx.action === 'approve' ? 'Approving...' : 'Approve'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              disabled={processingTx?.id === t.id}
+                              onClick={() => handleReviewRequest(t, false)}
+                              className="inline-flex items-center gap-1 rounded-lg bg-red-600/80 hover:bg-red-600 px-2.5 py-1 text-[11px] font-bold text-white transition-colors disabled:opacity-50"
+                            >
+                              {processingTx?.id === t.id && processingTx.action === 'reject' ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <X className="h-3 w-3" />
+                              )}
+                              <span>{processingTx?.id === t.id && processingTx.action === 'reject' ? 'Rejecting...' : 'Reject'}</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <span
+                            className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase ${
+                              t.status === 'approved' || t.status === 'completed'
+                                ? 'bg-emerald-500/20 text-emerald-300'
+                                : 'bg-red-500/20 text-red-300'
+                            }`}
+                          >
+                            {t.status}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -1709,6 +1983,35 @@ export default function Admin() {
         {/* ================= TAB 8: SYSTEM SETTINGS ================= */}
         {tab === 'settings' && <AdminPlatformSettings />}
       </div>
+
+      {/* Floating Real-time Feedback Toast (visible at any scroll position) */}
+      {msg && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-md animate-fade-up">
+          <div
+            className={`rounded-2xl p-4 shadow-2xl border flex items-center justify-between gap-3 backdrop-blur-md ${
+              msg.type === 'success'
+                ? 'bg-emerald-950/95 border-emerald-500/50 text-emerald-100 shadow-emerald-950/50'
+                : 'bg-red-950/95 border-red-500/50 text-red-100 shadow-red-950/50'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              {msg.type === 'success' ? (
+                <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+              ) : (
+                <AlertCircle className="h-5 w-5 text-red-400 shrink-0" />
+              )}
+              <span className="text-xs sm:text-sm font-semibold">{msg.text}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMsg(null)}
+              className="text-stone-400 hover:text-white shrink-0 p-1"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

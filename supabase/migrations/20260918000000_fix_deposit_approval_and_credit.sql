@@ -1,5 +1,15 @@
 -- ==============================================================================
--- Migration: Server-side referral payout & deposit approval
+-- Migration: Fix Deposit Approval Ambiguity and Automatic Wallet Credit
+-- ==============================================================================
+-- Resolves PostgreSQL error:
+-- "Could not choose the best candidate function between:
+--  public.admin_review_funds(p_tx_id => text, p_action => text),
+--  public.admin_review_funds(p_tx_id => uuid, p_action => text)"
+--
+-- Why: PostgREST passes JSON arguments as strings. Having two overloaded
+-- functions with identical parameter names confuses the query planner.
+-- Fix: Drop BOTH overloaded versions and keep ONE unified text-based function
+-- that safely handles both UUIDs and reference strings.
 -- ==============================================================================
 
 -- 1. Ensure transactions status constraint supports 'approved', 'completed', 'pending', 'rejected'
@@ -16,7 +26,7 @@ drop policy if exists "wallets_admin_update" on public.wallets;
 create policy "wallets_admin_update" on public.wallets
   for all using (public.is_admin()) with check (public.is_admin());
 
--- 3. Drop existing overloaded functions to eliminate candidate ambiguity
+-- 3. CRITICAL: Drop existing overloaded functions to eliminate ambiguity
 drop function if exists public.admin_review_funds(uuid, text);
 drop function if exists public.admin_review_funds(text, text);
 
@@ -41,7 +51,7 @@ begin
 
   v_action := lower(trim(p_action));
 
-  -- Try parsing as UUID first
+  -- Try parsing p_tx_id as UUID
   begin
     v_uuid := p_tx_id::uuid;
   exception when others then
@@ -238,6 +248,6 @@ begin
 end;
 $$;
 
--- 5. Grant execute permissions
+-- 5. Grant execute permissions on the single function
 grant execute on function public.admin_review_funds(text, text) to authenticated;
 grant execute on function public.admin_review_funds(text, text) to service_role;

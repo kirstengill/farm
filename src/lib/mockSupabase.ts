@@ -593,10 +593,14 @@ class MockQueryBuilder {
     // Handle join queries like profiles select('*, wallets(balance)')
     if (this.tableName === 'profiles' && this.columns.includes('wallets')) {
       data = data.map((p) => {
-        const wallet = state.wallets.find((w) => w.user_id === p.id)
+        const wallet = state.wallets.find((w) => String(w.user_id) === String(p.id))
+        const walletData = wallet
+          ? { balance: Number(wallet.balance || 0), total_invested: Number(wallet.total_invested || 0) }
+          : { balance: 0, total_invested: 0 }
         return {
           ...p,
-          wallets: wallet ? { balance: wallet.balance } : { balance: 0 },
+          wallets: walletData,
+          wallet: walletData,
         }
       })
     }
@@ -960,14 +964,18 @@ export const mockSupabase = {
         method: p_method,
         meta: {
           phone: p_phone,
+          mobile_number: p_phone,
+          sender_phone: p_phone,
           provider: methodLabel,
           country: 'Uganda',
           network: p_method === 'airtel_money' ? 'Airtel' : 'MTN',
         },
         created_at: new Date().toISOString(),
       }
+      state.transactions = Array.isArray(state.transactions) ? state.transactions : []
       state.transactions.unshift(tx)
 
+      state.notifications = Array.isArray(state.notifications) ? state.notifications : []
       state.notifications.unshift({
         id: `notif-${Date.now()}`,
         user_id: userId,
@@ -988,95 +996,175 @@ export const mockSupabase = {
     }
 
     if (fnName === 'admin_review_funds') {
-      const p_tx_id = args?.p_tx_id
-      const isApproved = args?.p_approve === true || args?.p_action === 'approve'
-      const tx = state.transactions.find((t) => t.id === p_tx_id)
+      try {
+        const rawId = String(args?.p_tx_id || args?.tx_id || args?.id || '').trim().toLowerCase()
+        const rawRef = String(args?.p_reference || args?.reference || '').trim().toLowerCase()
+        const actionStr = String(args?.p_action || args?.action || '').trim().toLowerCase()
+        const isApprove =
+          actionStr === 'approve' ||
+          actionStr === 'approved' ||
+          args?.p_approve === true ||
+          args?.approved === true
+        const isReject =
+          actionStr === 'reject' ||
+          actionStr === 'rejected' ||
+          args?.p_approve === false ||
+          args?.approved === false
 
-      if (!tx) return { data: null, error: { message: 'Transaction not found' } }
+        // Explicit determination: reject strictly overrides
+        const finalApproved = isApprove && !isReject
 
-      tx.status = isApproved ? 'approved' : 'rejected'
-      const wallet = state.wallets.find((w) => w.user_id === tx.user_id)
-
-      if (isApproved && wallet) {
-        if (tx.type === 'deposit') {
-          wallet.balance += Number(tx.amount)
-
-          const investorProfile = state.profiles.find((profile) => profile.id === tx.user_id)
-          const referrerProfile = investorProfile?.referred_by
-            ? state.profiles.find((profile) => profile.id === investorProfile.referred_by)
-            : null
-          const setting = state.platform_settings.find((row) => row.key === 'referral_bonus_pct')
-          const bonusPct = Math.max(0, Math.min(100, Number(setting?.value ?? 10)))
-          const bonusAmount = Math.round((Number(tx.amount) * bonusPct) / 100)
-          const alreadyPaid = state.transactions.some(
-            (transaction) =>
-              transaction.type === 'referral_bonus' &&
-              String((transaction.meta as any)?.source_deposit_id) === String(tx.id)
+        state.transactions = Array.isArray(state.transactions) ? state.transactions : []
+        let tx = state.transactions.find((t) => {
+          const tId = String(t.id || '').trim().toLowerCase()
+          const tRef = String(t.reference || '').trim().toLowerCase()
+          return (
+            (rawId && (tId === rawId || tRef === rawId)) ||
+            (rawRef && (tId === rawRef || tRef === rawRef))
           )
+        })
 
-          if (referrerProfile && referrerProfile.id !== tx.user_id) {
-            const referral: Referral = {
-              id: `ref-${tx.id}`,
-              referrer_id: referrerProfile.id,
-              referred_id: tx.user_id,
-              bonus_amount: bonusAmount,
-              status: 'approved',
-              created_at: new Date().toISOString(),
-            }
-            const existingReferral = state.referrals.find(
-              (row) => row.referrer_id === referral.referrer_id && row.referred_id === referral.referred_id
+        // If not matched directly, match by substring or case-insensitive exact
+        if (!tx && rawId) {
+          tx = state.transactions.find((t) => {
+            const tId = String(t.id || '').trim().toLowerCase()
+            const tRef = String(t.reference || '').trim().toLowerCase()
+            return (
+              tId === rawId ||
+              tRef === rawId ||
+              (rawId.length >= 5 && (tId.includes(rawId) || tRef.includes(rawId)))
             )
-            if (existingReferral) {
-              existingReferral.bonus_amount = bonusAmount
-              existingReferral.status = 'approved'
-            } else {
-              state.referrals.unshift(referral)
-            }
-
-            if (bonusAmount > 0 && !alreadyPaid) {
-              const referrerWallet = state.wallets.find((row) => row.user_id === referrerProfile.id)
-              if (referrerWallet) {
-                referrerWallet.balance += bonusAmount
-                referrerWallet.total_returns += bonusAmount
-                referrerWallet.updated_at = new Date().toISOString()
-              }
-              state.transactions.unshift({
-                id: `tx-ref-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-                user_id: referrerProfile.id,
-                type: 'referral_bonus',
-                amount: bonusAmount,
-                status: 'completed',
-                reference: `REF-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
-                method: 'wallet',
-                meta: {
-                  source_deposit_id: tx.id,
-                  referred_id: tx.user_id,
-                  deposit_amount: Number(tx.amount),
-                  bonus_pct: bonusPct,
-                },
-                created_at: new Date().toISOString(),
-              })
-            }
-          }
-        } else if (tx.type === 'withdrawal') {
-          wallet.balance = Math.max(0, wallet.balance - Number(tx.amount))
+          })
         }
-        wallet.updated_at = new Date().toISOString()
+
+        if (!tx) {
+          console.warn('[MockSupabase] Transaction not found for review:', { rawId, rawRef })
+          return { data: null, error: { message: `Transaction record not found (${rawId || rawRef || 'unknown'}).` } }
+        }
+
+        tx.status = finalApproved ? 'approved' : 'rejected'
+
+        state.wallets = Array.isArray(state.wallets) ? state.wallets : []
+        let wallet = state.wallets.find((w) => String(w.user_id) === String(tx.user_id))
+        if (!wallet) {
+          wallet = {
+            user_id: tx.user_id,
+            balance: 0,
+            total_invested: 0,
+            total_returns: 0,
+            updated_at: new Date().toISOString(),
+          }
+          state.wallets.push(wallet)
+        }
+
+        if (finalApproved) {
+          if (tx.type === 'deposit') {
+            wallet.balance = Number(wallet.balance || 0) + Number(tx.amount || 0)
+
+            state.profiles = Array.isArray(state.profiles) ? state.profiles : []
+            state.referrals = Array.isArray(state.referrals) ? state.referrals : []
+            state.platform_settings = Array.isArray(state.platform_settings) ? state.platform_settings : []
+
+            const investorProfile = state.profiles.find((profile) => String(profile.id) === String(tx.user_id))
+            const referrerProfile = investorProfile?.referred_by
+              ? state.profiles.find((profile) => String(profile.id) === String(investorProfile.referred_by))
+              : null
+            const setting = state.platform_settings.find((row) => row.key === 'referral_bonus_pct')
+            const bonusPct = Math.max(0, Math.min(100, Number(setting?.value ?? 10)))
+            const bonusAmount = Math.round((Number(tx.amount) * bonusPct) / 100)
+            const alreadyPaid = state.transactions.some(
+              (transaction) =>
+                transaction &&
+                transaction.type === 'referral_bonus' &&
+                String((transaction.meta as any)?.source_deposit_id) === String(tx.id)
+            )
+
+            if (referrerProfile && referrerProfile.id !== tx.user_id) {
+              const referral: Referral = {
+                id: `ref-${tx.id}`,
+                referrer_id: referrerProfile.id,
+                referred_id: tx.user_id,
+                bonus_amount: bonusAmount,
+                status: 'approved',
+                created_at: new Date().toISOString(),
+              }
+              const existingReferral = state.referrals.find(
+                (row) => row.referrer_id === referral.referrer_id && row.referred_id === referral.referred_id
+              )
+              if (existingReferral) {
+                existingReferral.bonus_amount = bonusAmount
+                existingReferral.status = 'approved'
+              } else {
+                state.referrals.unshift(referral)
+              }
+
+              if (bonusAmount > 0 && !alreadyPaid) {
+                let referrerWallet = state.wallets.find((row) => String(row.user_id) === String(referrerProfile.id))
+                if (!referrerWallet) {
+                  referrerWallet = {
+                    user_id: referrerProfile.id,
+                    balance: 0,
+                    total_invested: 0,
+                    total_returns: 0,
+                    updated_at: new Date().toISOString(),
+                  }
+                  state.wallets.push(referrerWallet)
+                }
+                referrerWallet.balance = Number(referrerWallet.balance || 0) + bonusAmount
+                referrerWallet.total_returns = Number(referrerWallet.total_returns || 0) + bonusAmount
+                referrerWallet.updated_at = new Date().toISOString()
+
+                state.transactions.unshift({
+                  id: `tx-ref-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                  user_id: referrerProfile.id,
+                  type: 'referral_bonus',
+                  amount: bonusAmount,
+                  status: 'completed',
+                  reference: `REF-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+                  method: 'wallet',
+                  meta: {
+                    source_deposit_id: tx.id,
+                    referred_id: tx.user_id,
+                    deposit_amount: Number(tx.amount),
+                    bonus_pct: bonusPct,
+                  },
+                  created_at: new Date().toISOString(),
+                })
+              }
+            }
+          } else if (tx.type === 'withdrawal') {
+            wallet.balance = Math.max(0, Number(wallet.balance || 0) - Number(tx.amount || 0))
+          }
+          wallet.updated_at = new Date().toISOString()
+        }
+
+        state.notifications = Array.isArray(state.notifications) ? state.notifications : []
+        state.notifications.unshift({
+          id: `notif-${Date.now()}`,
+          user_id: tx.user_id,
+          title: finalApproved ? `${tx.type} Approved` : `${tx.type} Rejected`,
+          body: finalApproved
+            ? `Your ${tx.type} of UGX ${Number(tx.amount).toLocaleString('en-US')} has been approved and credited.`
+            : `Your ${tx.type} of UGX ${Number(tx.amount).toLocaleString('en-US')} was rejected.`,
+          read: false,
+          created_at: new Date().toISOString(),
+        })
+
+        saveState(state)
+        if (typeof window !== 'undefined') {
+          try {
+            window.dispatchEvent(
+              new CustomEvent('wallet-balance-updated', {
+                detail: { userId: tx.user_id, amount: tx.amount, action: finalApproved ? 'approve' : 'reject' },
+              })
+            )
+          } catch {}
+        }
+        return { data: { success: true, status: tx.status }, error: null }
+      } catch (err: any) {
+        console.error('[MockSupabase] admin_review_funds exception:', err)
+        return { data: null, error: { message: err?.message || 'Failed to process transaction review.' } }
       }
-
-      state.notifications.unshift({
-        id: `notif-${Date.now()}`,
-        user_id: tx.user_id,
-        title: isApproved ? `${tx.type} Approved` : `${tx.type} Rejected`,
-        body: isApproved
-          ? `Your ${tx.type} of UGX ${Number(tx.amount).toLocaleString('en-US')} has been approved.`
-          : `Your ${tx.type} of UGX ${Number(tx.amount).toLocaleString('en-US')} was rejected.`,
-        read: false,
-        created_at: new Date().toISOString(),
-      })
-
-      saveState(state)
-      return { data: null, error: null }
     }
 
     if (fnName === 'award_signup_bonus') {

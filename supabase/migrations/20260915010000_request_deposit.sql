@@ -25,10 +25,14 @@ begin
     raise exception 'Amount must be positive';
   end if;
 
-  select (value)::numeric
-  into min_amount
-  from public.platform_settings
-  where key = 'min_deposit';
+  begin
+    select (value #>> '{}')::numeric
+    into min_amount
+    from public.platform_settings
+    where key = 'min_deposit';
+  exception when others then
+    min_amount := 10000;
+  end;
 
   if p_amount < coalesce(min_amount, 10000) then
     raise exception 'Minimum is UGX %', coalesce(min_amount, 10000);
@@ -49,6 +53,8 @@ begin
     p_method,
     jsonb_build_object(
       'phone', coalesce(p_phone, ''),
+      'mobile_number', coalesce(p_phone, ''),
+      'sender_phone', coalesce(p_phone, ''),
       'country', 'Uganda',
       'provider', case when p_method = 'airtel_money' then 'Airtel Money' else 'MTN Mobile Money' end
     )

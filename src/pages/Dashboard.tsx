@@ -74,6 +74,7 @@ export default function Dashboard() {
   const [modal, setModal] = useState<'deposit' | 'withdraw' | null>(null)
   const [paymentProvider, setPaymentProvider] = useState<'mtn' | 'airtel'>('mtn')
   const [phoneContact, setPhoneContact] = useState('')
+  const [depositTxRef, setDepositTxRef] = useState('')
   const [amount, setAmount] = useState('')
   const [msg, setMsg] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
@@ -166,8 +167,23 @@ export default function Dashboard() {
         setPlatformSettings(fresh)
       })
     }
+
+    // Automatically re-fetch wallet & transactions when approved/credited from admin
+    const handleFundsUpdate = () => {
+      loadDashboardData()
+    }
+
     window.addEventListener('platform-settings-updated', handleSettingsUpdate)
-    return () => window.removeEventListener('platform-settings-updated', handleSettingsUpdate)
+    window.addEventListener('wallet-balance-updated', handleFundsUpdate)
+    window.addEventListener('storage', handleFundsUpdate)
+    window.addEventListener('focus', handleFundsUpdate)
+
+    return () => {
+      window.removeEventListener('platform-settings-updated', handleSettingsUpdate)
+      window.removeEventListener('wallet-balance-updated', handleFundsUpdate)
+      window.removeEventListener('storage', handleFundsUpdate)
+      window.removeEventListener('focus', handleFundsUpdate)
+    }
   }, [user])
 
   useEffect(() => {
@@ -198,6 +214,11 @@ export default function Dashboard() {
       return
     }
 
+    if (modal === 'deposit' && !phoneContact.trim()) {
+      setErr('Please enter your Registered Mobile Money Number.')
+      return
+    }
+
     if (modal === 'withdraw') {
       const minW = platformSettings?.min_withdrawal ?? 10000
       if (amt < minW) {
@@ -216,7 +237,13 @@ export default function Dashboard() {
 
     try {
       const method = paymentProvider === 'mtn' ? 'mtn_mobile_money' : 'airtel_money'
-      const clientReference = modal === 'deposit' ? `DEP-${crypto.randomUUID()}` : undefined
+      const cleanedPhone = phoneContact.replace(/\D/g, '')
+      const phoneSuffix = cleanedPhone.length >= 6 ? cleanedPhone.slice(-6) : cleanedPhone
+      const clientReference =
+        modal === 'deposit'
+          ? depositTxRef.trim() ||
+            `DEP-${phoneSuffix ? phoneSuffix + '-' : ''}${Math.random().toString(36).substring(2, 6).toUpperCase()}`
+          : undefined
       const rpcName = modal === 'deposit' ? 'request_deposit' : 'request_funds'
       const rpcPayload =
         modal === 'deposit'
@@ -252,11 +279,12 @@ export default function Dashboard() {
         setSuccessMsg(
           `${modal === 'deposit' ? 'Deposit' : 'Withdrawal'} request for ${formatUGX(
             amt
-          )} via ${providerName} submitted${
+          )} via ${providerName} (${phoneContact.trim()}) submitted${
             createdReference ? ` with reference ${createdReference}` : ''
           }. Awaiting settlement confirmation.`
         )
         setAmount('')
+        setDepositTxRef('')
         setModal(null)
         window.setTimeout(() => setSuccessMsg(''), 6000)
 
@@ -795,7 +823,12 @@ export default function Dashboard() {
                             </td>
                             <td className="py-3 text-ink-500">{formatDate(t.created_at)}</td>
                             <td className="py-3 font-mono text-[11px] text-ink-500">
-                              {t.reference}
+                              <div>{t.reference}</div>
+                              {((t.meta as any)?.phone || (t.meta as any)?.mobile_number) && (
+                                <div className="text-[10px] text-emerald-600 font-mono">
+                                  {String((t.meta as any)?.phone || (t.meta as any)?.mobile_number)}
+                                </div>
+                              )}
                             </td>
                             <td className="py-3 text-right font-display font-bold text-forest-950">
                               {t.type === 'withdrawal' || t.type === 'investment' ? '-' : '+'}
@@ -1192,7 +1225,14 @@ export default function Dashboard() {
                             {t.type.replace('_', ' ')}
                           </td>
                           <td className="py-3.5 text-stone-400">{formatDate(t.created_at)}</td>
-                          <td className="py-3.5 font-mono text-[11px] text-stone-400">{t.reference}</td>
+                          <td className="py-3.5 font-mono text-[11px] text-stone-400">
+                            <div>{t.reference}</div>
+                            {((t.meta as any)?.phone || (t.meta as any)?.mobile_number) && (
+                              <div className="text-[10px] text-emerald-400 font-mono">
+                                {String((t.meta as any)?.phone || (t.meta as any)?.mobile_number)}
+                              </div>
+                            )}
+                          </td>
                           <td className="py-3.5 text-right font-display font-bold text-white">
                             {t.type === 'withdrawal' || t.type === 'investment' ? '-' : '+'}
                             {formatUGX(t.amount)}
@@ -1667,13 +1707,32 @@ export default function Dashboard() {
                   </span>
                   <input
                     type="tel"
+                    required
                     placeholder="e.g. +256 772 123456"
                     value={phoneContact}
                     onChange={(e) => setPhoneContact(e.target.value)}
                     className="w-full rounded-xl border border-stone-700 bg-forest-900 py-2.5 pl-10 pr-4 text-xs font-medium text-white focus:border-forest-600 focus:outline-none focus:ring-2 focus:ring-forest-600/20"
                   />
                 </div>
+                <p className="mt-1 text-[11px] text-stone-400">
+                  This phone number is added to your transaction record so the admin can verify your deposit.
+                </p>
               </div>
+
+              {modal === 'deposit' && (
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-stone-400 block mb-1.5">
+                    Mobile Money Transaction ID / Carrier Ref (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 19827364501 or leave blank to auto-generate"
+                    value={depositTxRef}
+                    onChange={(e) => setDepositTxRef(e.target.value)}
+                    className="w-full rounded-xl border border-stone-700 bg-forest-900 py-2.5 px-3.5 text-xs font-medium text-white focus:border-forest-600 focus:outline-none focus:ring-2 focus:ring-forest-600/20"
+                  />
+                </div>
+              )}
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
