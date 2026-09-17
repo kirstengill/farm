@@ -15,7 +15,7 @@ export default function AuthLayout({
   activePage?: 'signin' | 'signup'
 }) {
   return (
-    <div className="min-h-screen bg-[#f7f8f5] text-stone-900 flex flex-col lg:flex-row antialiased selection:bg-forest-800 selection:text-white">
+    <div className="min-h-screen bg-forest-950 text-stone-100 flex flex-col lg:flex-row antialiased selection:bg-forest-800 selection:text-white">
       {/* ================= LEFT BRAND SHOWCASE PANEL (Desktop 50/50 or 45/55) ================= */}
       <div className="relative hidden lg:flex lg:w-[48%] xl:w-[46%] 2xl:w-[44%] shrink-0 flex-col justify-between bg-forest-950 p-12 xl:p-16 text-white overflow-hidden select-none">
         {/* Ambient atmospheric lighting & subtle pattern */}
@@ -111,13 +111,13 @@ export default function AuthLayout({
       {/* ================= RIGHT INTERACTIVE AUTHENTICATION COLUMN ================= */}
       <div className="flex-1 flex flex-col justify-between p-6 sm:p-10 lg:p-12 xl:p-16 min-h-screen">
         {/* Mobile Header */}
-        <div className="lg:hidden flex items-center justify-between pb-6 border-b border-stone-200/80 mb-6">
+        <div className="lg:hidden flex items-center justify-between pb-6 border-b border-stone-800 mb-6">
           <Link to="/">
             <Logo />
           </Link>
           <Link
             to="/"
-            className="text-xs font-semibold text-forest-800 hover:text-forest-950 flex items-center gap-1"
+            className="text-xs font-semibold text-stone-300 hover:text-white flex items-center gap-1"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             <span>Home</span>
@@ -129,16 +129,16 @@ export default function AuthLayout({
           {/* Top Page Header */}
           <div className="mb-8">
             <div className="flex items-center justify-between">
-              <h1 className="font-display text-2xl sm:text-3xl font-bold text-forest-950 tracking-tight">
+              <h1 className="font-display text-2xl sm:text-3xl font-bold text-white tracking-tight">
                 {title}
               </h1>
               {activePage && (
-                <span className="text-xs font-medium text-ink-500 bg-stone-100 border border-stone-200 rounded-full px-3 py-1">
+                <span className="text-xs font-medium text-stone-400 bg-stone-900 border border-stone-800 rounded-full px-3 py-1">
                   {activePage === 'signin' ? 'Sign In' : 'Sign Up'}
                 </span>
               )}
             </div>
-            <p className="text-sm text-ink-600 mt-1.5 leading-relaxed">
+            <p className="text-sm text-stone-400 mt-1.5 leading-relaxed">
               {subtitle}
             </p>
           </div>
@@ -148,14 +148,14 @@ export default function AuthLayout({
         </div>
 
         {/* Right Footer / Security & Terms Note */}
-        <div className="pt-8 mt-8 border-t border-stone-200/80 text-center text-xs text-ink-500 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+        <div className="pt-8 mt-8 border-t border-stone-800 text-center text-xs text-stone-500 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
           <span>Protected by 256-bit TLS encryption</span>
-          <span className="hidden sm:inline text-stone-300">·</span>
-          <Link to="/" className="hover:text-forest-900 transition-colors">
+          <span className="hidden sm:inline text-stone-700">·</span>
+          <Link to="/" className="hover:text-white transition-colors">
             Terms of Service
           </Link>
-          <span className="hidden sm:inline text-stone-300">·</span>
-          <Link to="/" className="hover:text-forest-900 transition-colors">
+          <span className="hidden sm:inline text-stone-700">·</span>
+          <Link to="/" className="hover:text-white transition-colors">
             Privacy Policy
           </Link>
         </div>

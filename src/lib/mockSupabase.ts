@@ -116,10 +116,11 @@ const DEFAULT_FARMS: FarmProject[] = [
     location: 'Allgäu, Bavaria, Germany',
     image_url: farmArtFor('cattle'),
     status: 'active',
-    min_amount: 250000,
+    min_amount: 30000,
     max_amount: 25000000,
     expected_return_pct: 16.5,
     duration_months: 12,
+    daily_return: 13.75,
     target_amount: 300000000,
     funded_amount: 215000000,
     created_at: new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(),
@@ -134,10 +135,11 @@ const DEFAULT_FARMS: FarmProject[] = [
     location: 'North Rhine-Westphalia, Germany',
     image_url: farmArtFor('feeds'),
     status: 'active',
-    min_amount: 100000,
+    min_amount: 15000,
     max_amount: 15000000,
     expected_return_pct: 13.8,
     duration_months: 6,
+    daily_return: 11.5,
     target_amount: 180000000,
     funded_amount: 118000000,
     created_at: new Date(Date.now() - 25 * 24 * 3600 * 1000).toISOString(),
@@ -152,10 +154,11 @@ const DEFAULT_FARMS: FarmProject[] = [
     location: 'Saxony, Germany',
     image_url: farmArtFor('broilers'),
     status: 'active',
-    min_amount: 50000,
+    min_amount: 20000,
     max_amount: 10000000,
     expected_return_pct: 15.2,
     duration_months: 3,
+    daily_return: 33.78,
     target_amount: 140000000,
     funded_amount: 94000000,
     created_at: new Date(Date.now() - 15 * 24 * 3600 * 1000).toISOString(),
@@ -170,10 +173,11 @@ const DEFAULT_FARMS: FarmProject[] = [
     location: 'Upper Bavaria, Germany',
     image_url: farmArtFor('cattle'),
     status: 'active',
-    min_amount: 200000,
+    min_amount: 30000,
     max_amount: 20000000,
     expected_return_pct: 14.0,
     duration_months: 9,
+    daily_return: 15.56,
     target_amount: 220000000,
     funded_amount: 165000000,
     created_at: new Date(Date.now() - 20 * 24 * 3600 * 1000).toISOString(),
@@ -188,10 +192,11 @@ const DEFAULT_FARMS: FarmProject[] = [
     location: 'Danube Valley, Germany',
     image_url: farmArtFor('feeds'),
     status: 'active',
-    min_amount: 100000,
+    min_amount: 15000,
     max_amount: 18000000,
     expected_return_pct: 12.5,
     duration_months: 8,
+    daily_return: 7.81,
     target_amount: 160000000,
     funded_amount: 82000000,
     created_at: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString(),
@@ -206,10 +211,11 @@ const DEFAULT_FARMS: FarmProject[] = [
     location: 'Brandenburg, Germany',
     image_url: farmArtFor('broilers'),
     status: 'active',
-    min_amount: 75000,
+    min_amount: 20000,
     max_amount: 12000000,
     expected_return_pct: 17.0,
     duration_months: 4,
+    daily_return: 28.33,
     target_amount: 175000000,
     funded_amount: 122500000,
     created_at: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(),
@@ -224,10 +230,11 @@ const DEFAULT_FARMS: FarmProject[] = [
     location: 'Lower Bavaria, Germany',
     image_url: farmArtFor('pig'),
     status: 'active',
-    min_amount: 100000,
+    min_amount: 30000,
     max_amount: 15000000,
     expected_return_pct: 16.5,
     duration_months: 6,
+    daily_return: 27.5,
     target_amount: 250000000,
     funded_amount: 145000000,
     created_at: new Date(Date.now() - 12 * 24 * 3600 * 1000).toISOString(),
@@ -340,6 +347,12 @@ function getInitialState(): DBState {
         amount: 1500000,
         status: 'active',
         expected_return: 247500,
+        daily_return: 687.5,
+        returns_claimed_through: null,
+        earning_days: 0,
+        accumulated_return: 0,
+        claimable_return: 0,
+        claimed_return: 0,
         reference: 'INV-DEMO1',
         start_date: new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(),
         maturity_date: new Date(Date.now() + 335 * 24 * 3600 * 1000).toISOString(),
@@ -891,7 +904,8 @@ export const mockSupabase = {
 
     if (fnName === 'request_funds' || fnName === 'request_deposit') {
       if (!userId) return { data: null, error: { message: 'Not authenticated' } }
-      const p_type = fnName === 'request_deposit' ? 'deposit' : (args?.p_type as 'deposit' | 'withdrawal')
+      const rawType = fnName === 'request_deposit' ? 'deposit' : String(args?.p_type || 'deposit')
+      const p_type: 'deposit' | 'withdrawal' = rawType.toLowerCase().startsWith('withdraw') ? 'withdrawal' : 'deposit'
       const p_amount = Number(args?.p_amount)
       const p_method = (args?.p_method as string) || 'mtn_mobile_money'
       const p_phone = (args?.p_phone as string) || ''
@@ -927,58 +941,6 @@ export const mockSupabase = {
             data: null,
             error: {
               message: `Insufficient withdrawable balance. Available: UGX ${(wallet?.balance ?? 0).toLocaleString('en-US')}.`,
-            },
-          }
-        }
-
-        // BACKEND WITHDRAWAL LOCK ENFORCEMENT
-        // Check platform lock settings
-        const lockDaysSetting = state.platform_settings.find(
-          (s) => s.key === 'withdrawal_lock_days'
-        )
-        const lockDays = Number(lockDaysSetting?.value ?? 7)
-        const lockEnabledSetting = state.platform_settings.find(
-          (s) => s.key === 'withdrawal_lock_enabled'
-        )
-        const lockEnabled = lockEnabledSetting ? Boolean(lockEnabledSetting.value) && lockDays > 0 : lockDays > 0
-
-        // Check if user has explicit lock date on their profile
-        let lockExpiryDate: Date | null = null
-        if (userProfile?.withdrawal_locked_until) {
-          const customDate = new Date(userProfile.withdrawal_locked_until)
-          if (customDate.getTime() > Date.now()) {
-            lockExpiryDate = customDate
-          }
-        } else if (lockEnabled && lockDays > 0) {
-          // Check date of account creation or latest approved deposit
-          const userDeposits = state.transactions.filter(
-            (t) => t.user_id === userId && t.type === 'deposit' && t.status === 'approved'
-          )
-          const latestDepositTime =
-            userDeposits.length > 0
-              ? Math.max(...userDeposits.map((d) => new Date(d.created_at).getTime()))
-              : null
-
-          const anchorTime =
-            latestDepositTime ||
-            (userProfile ? new Date(userProfile.created_at).getTime() : Date.now())
-          const calculatedExpiry = new Date(anchorTime + lockDays * 24 * 3600 * 1000)
-
-          if (calculatedExpiry.getTime() > Date.now()) {
-            lockExpiryDate = calculatedExpiry
-          }
-        }
-
-        if (lockExpiryDate && lockExpiryDate.getTime() > Date.now()) {
-          const dateFormatted = lockExpiryDate.toLocaleDateString('en-GB', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-          })
-          return {
-            data: null,
-            error: {
-              message: `Withdrawals are currently locked. Withdrawals will become available after ${lockDays} days (on ${dateFormatted}).`,
             },
           }
         }
@@ -1158,55 +1120,121 @@ export const mockSupabase = {
 
     if (fnName === 'credit_daily_investment_rewards') {
       if (!userId) return { data: null, error: { message: 'Not authenticated' } }
-      const dayKey = new Date().toISOString().slice(0, 10)
+      return { data: { ok: true }, error: null }
+    }
 
-      for (const investment of state.investments.filter((inv) => inv.user_id === userId && inv.status === 'active')) {
-        const farm = state.farm_projects.find((f) => f.id === investment.farm_id)
+    if (fnName === 'sync_investment_return_accruals') {
+      if (!userId) return { data: null, error: { message: 'Not authenticated' } }
+      const lockSetting = state.platform_settings.find((setting) => setting.key === 'withdrawal_lock_days')
+      const lockEnabledSetting = state.platform_settings.find((setting) => setting.key === 'withdrawal_lock_enabled')
+      const lockEnabled = lockEnabledSetting ? Boolean(lockEnabledSetting.value) : true
+      const lockDays = lockEnabled ? Math.max(0, Number(lockSetting?.value ?? 0)) : 0
+      const dayMs = 86400000
+
+      for (const investment of state.investments.filter((item) => item.status === 'active')) {
+        const farm = state.farm_projects.find((item) => item.id === investment.farm_id)
         if (!farm) continue
+        const startDay = new Date(investment.start_date || investment.created_at).setHours(0, 0, 0, 0)
+        const currentDay = new Date().setHours(0, 0, 0, 0)
+        const maturityDay = new Date(investment.maturity_date || Date.now()).setHours(0, 0, 0, 0)
+        const daysSinceStart = Math.max(0, Math.floor((Math.min(currentDay, maturityDay) - startDay) / dayMs) + 1)
+        const reward = Number(investment.daily_return || 0)
+        const accumulated = Math.round(reward * daysSinceStart * 100) / 100
 
-        const alreadyCredited = state.transactions.some(
-          (t) =>
-            t.user_id === userId &&
-            t.type === 'return' &&
-            String((t.meta as any)?.investment_id) === String(investment.id) &&
-            String((t.meta as any)?.reward_day) === dayKey
-        )
+        investment.earning_days = daysSinceStart
+        investment.accumulated_return = accumulated
 
-        if (alreadyCredited) continue
-
-        const reward = Math.round(
-          (investment.amount * (farm.expected_return_pct || 12)) /
-            (100 * (farm.duration_months || 1) * 30)
-        )
-        if (reward <= 0) continue
-
-        const wallet = state.wallets.find((w) => w.user_id === userId)
-        if (wallet) {
-          wallet.balance += reward
-          wallet.total_returns += reward
-          wallet.updated_at = new Date().toISOString()
-        }
-
-        state.transactions.unshift({
-          id: `tx-reward-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-          user_id: userId,
-          type: 'return',
-          amount: reward,
-          status: 'completed',
-          reference: `REWARD-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
-          method: 'wallet',
-          meta: {
-            investment_id: investment.id,
-            farm_id: farm.id,
-            reward_day: dayKey,
-            source: 'daily_reward',
-          },
-          created_at: new Date().toISOString(),
-        })
+        const startTime = new Date(investment.start_date || investment.created_at).getTime()
+        const firstRewardTime = startTime + lockDays * dayMs
+        const isLocked = Date.now() < firstRewardTime
+        investment.claimable_return = isLocked
+          ? 0
+          : Math.max(0, accumulated - Number(investment.claimed_return || 0))
       }
-
       saveState(state)
       return { data: { ok: true }, error: null }
+    }
+
+    if (fnName === 'claim_investment_returns') {
+      if (!userId) return { data: null, error: { message: 'Not authenticated' } }
+      const investment = state.investments.find(
+        (inv) => inv.id === args?.p_investment_id && inv.user_id === userId
+      )
+      if (!investment) return { data: null, error: { message: 'Investment not found' } }
+      if (investment.status !== 'active') return { data: null, error: { message: 'Investment is not active' } }
+
+      const farm = state.farm_projects.find((f) => f.id === investment.farm_id)
+      if (!farm) return { data: null, error: { message: 'Investment program not found' } }
+
+      const lockSetting = state.platform_settings.find((setting) => setting.key === 'withdrawal_lock_days')
+      const lockEnabledSetting = state.platform_settings.find((setting) => setting.key === 'withdrawal_lock_enabled')
+      const lockEnabled = lockEnabledSetting ? Boolean(lockEnabledSetting.value) : true
+      const lockDays = lockEnabled ? Math.max(0, Number(lockSetting?.value ?? 0)) : 0
+      const startTime = new Date(investment.start_date || investment.created_at).getTime()
+      const firstRewardTime = startTime + lockDays * 86400000
+
+      if (Date.now() < firstRewardTime) {
+        return {
+          data: null,
+          error: {
+            message: `Returns claim locked until ${new Date(firstRewardTime).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}.`,
+          },
+        }
+      }
+
+      const reward = Number(investment.daily_return || 0)
+      if (reward <= 0) return { data: 0, error: null }
+
+      const dayMs = 86400000
+      const startDay = new Date(investment.start_date || investment.created_at).setHours(0, 0, 0, 0)
+      const currentDay = new Date().setHours(0, 0, 0, 0)
+      const maturityDay = new Date(investment.maturity_date || Date.now()).setHours(0, 0, 0, 0)
+      const daysSinceStart = Math.max(0, Math.floor((Math.min(currentDay, maturityDay) - startDay) / dayMs) + 1)
+      investment.earning_days = daysSinceStart
+      investment.accumulated_return = Math.round(reward * daysSinceStart * 100) / 100
+
+      const claimableAmount = Math.max(
+        0,
+        Math.round((investment.accumulated_return - Number(investment.claimed_return || 0)) * 100) / 100
+      )
+
+      if (claimableAmount <= 0) {
+        return { data: 0, error: { message: 'No new daily returns available to claim at this time.' } }
+      }
+
+      const wallet = state.wallets.find((w) => w.user_id === userId)
+      if (wallet) {
+        wallet.balance += claimableAmount
+        wallet.total_returns += claimableAmount
+        wallet.updated_at = new Date().toISOString()
+      }
+
+      const claimedThrough = new Date().toISOString().slice(0, 10)
+      investment.returns_claimed_through = claimedThrough
+      investment.claimed_return = Number(investment.claimed_return || 0) + claimableAmount
+      investment.claimable_return = 0
+
+      state.transactions.unshift({
+        id: `tx-reward-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        user_id: userId,
+        type: 'return',
+        amount: claimableAmount,
+        status: 'completed',
+        reference: `REWARD-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+        method: 'wallet',
+        meta: {
+          investment_id: investment.id,
+          farm_id: farm.id,
+          farm_name: farm.name,
+          daily_return: reward,
+          earning_days: daysSinceStart,
+          source: 'daily_reward_claim',
+        },
+        created_at: new Date().toISOString(),
+      })
+
+      saveState(state)
+      return { data: claimableAmount, error: null }
     }
 
     if (fnName === 'create_investment') {
@@ -1216,12 +1244,25 @@ export const mockSupabase = {
 
       const farm = state.farm_projects.find((f) => f.id === p_project_id)
       if (!farm) return { data: null, error: { message: 'Investment program not found' } }
+      if (p_amount < farm.min_amount) {
+        return { data: null, error: { message: `Minimum investment is UGX ${farm.min_amount.toLocaleString('en-US')}.` } }
+      }
 
       const wallet = state.wallets.find((w) => w.user_id === userId)
       if (!wallet || wallet.balance < p_amount) {
         return { data: null, error: { message: 'Insufficient wallet balance' } }
       }
 
+      const invId = `inv-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
+      const dailyReturn = Number(
+        farm.daily_return && farm.min_amount > 0
+          ? Math.round(farm.daily_return * (p_amount / farm.min_amount) * 100) / 100
+          : Math.round(
+              (p_amount * (farm.expected_return_pct || 14)) /
+                (100 * (farm.duration_months || 1) * 30) * 100
+            ) / 100
+      )
+      const expReturn = Math.round(dailyReturn * (farm.duration_months || 1) * 30 * 100) / 100
       wallet.balance -= p_amount
       wallet.total_invested += p_amount
       wallet.updated_at = new Date().toISOString()
@@ -1230,9 +1271,6 @@ export const mockSupabase = {
       if (farm.target_amount > 0 && farm.funded_amount >= farm.target_amount) {
         farm.status = 'funded'
       }
-
-      const invId = `inv-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
-      const expReturn = Math.round((p_amount * (farm.expected_return_pct || 12)) / 100)
       const inv: Investment = {
         id: invId,
         user_id: userId,
@@ -1240,6 +1278,12 @@ export const mockSupabase = {
         amount: p_amount,
         status: 'active',
         expected_return: expReturn,
+        daily_return: dailyReturn,
+        returns_claimed_through: null,
+        earning_days: 0,
+        accumulated_return: 0,
+        claimable_return: 0,
+        claimed_return: 0,
         reference: `INV-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
         start_date: new Date().toISOString(),
         maturity_date: new Date(

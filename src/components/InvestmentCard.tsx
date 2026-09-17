@@ -62,12 +62,14 @@ export default function InvestmentCard({
       ? Math.min(100, Math.round((project.funded_amount / project.target_amount) * 100))
       : 0
 
-  // Calculate periodic returns on reference minimum and median investment
+  // Use the product's configured daily return at the minimum investment.
   const refAmount = project.min_amount || 100
-  const expectedTotalProfit = Math.round(((refAmount * project.expected_return_pct) / 100) * 100) / 100
   const durationMonths = project.duration_months || 1
-  const dailyReturnRef = Math.round((expectedTotalProfit / (durationMonths * 30)) * 100) / 100
-  const dailyRatePct = (project.expected_return_pct / (durationMonths * 30)).toFixed(2)
+  const dailyReturnRef = project.daily_return ?? Math.round(
+    (refAmount * project.expected_return_pct) / (100 * durationMonths * 30)
+  )
+  const expectedTotalProfit = Math.round(dailyReturnRef * durationMonths * 30 * 100) / 100
+  const dailyRatePct = ((dailyReturnRef / refAmount) * 100).toFixed(2)
 
   return (
     <div
@@ -158,7 +160,7 @@ export default function InvestmentCard({
             <div className="border-l border-stone-200/60 pl-3">
               <span className="text-[11px] font-medium text-ink-500 block">Total Expected Return</span>
               <span className="font-display text-sm font-bold text-emerald-800 block">
-                +{project.expected_return_pct}% Total
+                +{formatUGX(expectedTotalProfit)} Total
               </span>
               <span className="text-[10px] text-emerald-700 font-medium block">
                 +{formatUGX(expectedTotalProfit)} on min

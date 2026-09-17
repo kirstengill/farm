@@ -49,17 +49,17 @@ export default function InvestmentDetailModal({
   // Calculations from backend parameters
   const returnPct = project.expected_return_pct || 14
   const durationMonths = project.duration_months || 12
-  const calcTotalReturn = Math.round(((investAmount * returnPct) / 100) * 100) / 100
+  const configuredDailyReturn = project.daily_return ?? Math.round(
+    (minAmt * returnPct) / (100 * durationMonths * 30)
+  )
+  const calcDailyReturn = Math.round(configuredDailyReturn * (investAmount / minAmt) * 100) / 100
+  const calcTotalReturn = Math.round(calcDailyReturn * durationMonths * 30 * 100) / 100
   const calcTotalPayout = investAmount + calcTotalReturn
-  const calcDailyReturn =
-    durationMonths > 0
-      ? Math.round((calcTotalReturn / (durationMonths * 30)) * 100) / 100
-      : 0
   const calcMonthlyReturn =
     durationMonths > 0
       ? Math.round((calcTotalReturn / durationMonths) * 100) / 100
       : 0
-  const dailyRatePct = durationMonths > 0 ? (returnPct / (durationMonths * 30)).toFixed(2) : '0.00'
+  const dailyRatePct = investAmount > 0 ? ((calcDailyReturn / investAmount) * 100).toFixed(2) : '0.00'
 
   const startDate = new Date().toISOString()
   const completionDate = new Date(
@@ -120,7 +120,7 @@ export default function InvestmentDetailModal({
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-forest-950/70 backdrop-blur-sm overflow-y-auto animate-fade"
     >
       <div
-        className="relative w-full max-w-3xl rounded-3xl bg-white shadow-2xl border border-stone-200 overflow-hidden my-6 max-h-[92vh] flex flex-col"
+        className="relative w-full max-w-3xl rounded-3xl bg-forest-900 shadow-2xl border border-stone-800 overflow-hidden my-6 max-h-[92vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header Bar with Close Button */}
@@ -172,28 +172,28 @@ export default function InvestmentDetailModal({
           <div className="p-5 sm:p-7 space-y-6">
             {/* Description & High-Level Highlights */}
             <div>
-              <p className="text-sm sm:text-base text-ink-600 leading-relaxed">
+              <p className="text-sm sm:text-base text-stone-300 leading-relaxed">
                 {project.description}
               </p>
             </div>
 
             {/* Current Program Funding Progress */}
-            <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4 sm:p-5">
+            <div className="rounded-2xl border border-stone-800 bg-stone-900/60 p-4 sm:p-5">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-ink-500">
+                <span className="text-xs font-bold uppercase tracking-wider text-stone-400">
                   Current Funding Progress
                 </span>
-                <span className="text-sm font-bold text-forest-900">
+                <span className="text-sm font-bold text-white">
                   {formatUGX(project.funded_amount)} / {formatUGX(project.target_amount)} ({fundedPct}%)
                 </span>
               </div>
-              <div className="h-2.5 w-full overflow-hidden rounded-full bg-stone-200">
+              <div className="h-2.5 w-full overflow-hidden rounded-full bg-stone-800">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-forest-600 to-forest-500 transition-all duration-700"
                   style={{ width: `${fundedPct}%` }}
                 />
               </div>
-              <div className="mt-2 flex items-center justify-between text-xs text-ink-500">
+              <div className="mt-2 flex items-center justify-between text-xs text-stone-400">
                 <span>Program Min: {formatUGX(project.min_amount)}</span>
                 <span>
                   Program Max: {project.max_amount ? formatUGX(project.max_amount) : 'Flexible'}
@@ -202,20 +202,20 @@ export default function InvestmentDetailModal({
             </div>
 
             {/* Dynamic Investment Amount Calculator */}
-            <div className="rounded-2xl border-2 border-forest-800/15 bg-forest-50/40 p-5 sm:p-6 space-y-4">
+            <div className="rounded-2xl border-2 border-forest-800/15 bg-forest-950/40 p-5 sm:p-6 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h3 className="font-display text-lg font-bold text-forest-950">
+                  <h3 className="font-display text-lg font-bold text-white">
                     Configure Investment Amount
                   </h3>
-                  <p className="text-xs text-ink-500">
+                  <p className="text-xs text-stone-400">
                     Set your desired capital allocation to simulate real-time projected returns.
                   </p>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs text-ink-500">Your Wallet Balance:</span>
-                  <div className="font-semibold text-forest-900 text-sm flex items-center gap-1 justify-end">
-                    <WalletIcon className="h-3.5 w-3.5 text-forest-700" />
+                  <span className="text-xs text-stone-400">Your Wallet Balance:</span>
+                  <div className="font-semibold text-white text-sm flex items-center gap-1 justify-end">
+                    <WalletIcon className="h-3.5 w-3.5 text-forest-500" />
                     {formatUGX(availableBalance)}
                   </div>
                 </div>
@@ -224,7 +224,7 @@ export default function InvestmentDetailModal({
               {/* Amount Input with Quick Presets */}
               <div className="space-y-2">
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-forest-900 font-bold text-xs">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white font-bold text-xs">
                     UGX
                   </span>
                   <input
@@ -235,7 +235,7 @@ export default function InvestmentDetailModal({
                     step={10000}
                     value={investAmount || ''}
                     onChange={(e) => setInvestAmount(Number(e.target.value))}
-                    className="w-full rounded-xl border border-stone-300 bg-white py-3 pl-14 pr-4 font-display text-xl font-bold text-forest-950 focus:border-forest-600 focus:outline-none focus:ring-2 focus:ring-forest-600/20"
+                    className="w-full rounded-xl border border-stone-700 bg-forest-900 py-3 pl-14 pr-4 font-display text-xl font-bold text-white focus:border-forest-600 focus:outline-none focus:ring-2 focus:ring-forest-600/20"
                   />
                 </div>
 
@@ -249,7 +249,7 @@ export default function InvestmentDetailModal({
                       className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
                         investAmount === preset
                           ? 'bg-forest-800 text-white'
-                          : 'bg-white border border-stone-200 text-forest-900 hover:bg-forest-50'
+                          : 'bg-forest-900 border border-stone-700 text-stone-200 hover:bg-stone-800'
                       }`}
                     >
                       {formatUGX(preset)}
@@ -259,7 +259,7 @@ export default function InvestmentDetailModal({
                     <button
                       type="button"
                       onClick={() => setInvestAmount(Math.max(minAmt, availableBalance))}
-                      className="rounded-lg px-2.5 py-1 text-xs font-semibold bg-gold-100 text-gold-800 border border-gold-300 hover:bg-gold-200"
+                      className="rounded-lg px-2.5 py-1 text-xs font-semibold bg-gold-900/40 text-gold-300 border border-gold-700 hover:bg-gold-900/60"
                     >
                       Max Available ({formatUGX(availableBalance)})
                     </button>
@@ -268,29 +268,29 @@ export default function InvestmentDetailModal({
               </div>
 
               {/* Financial Returns Matrix */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-forest-900/10">
-                <div className="rounded-xl bg-white p-3 border border-stone-200">
-                  <span className="text-[10px] font-bold uppercase text-ink-500 block">Daily Return</span>
-                  <span className="font-display text-base font-bold text-forest-900 block mt-0.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-stone-800">
+                <div className="rounded-xl bg-forest-900 p-3 border border-stone-800">
+                  <span className="text-[10px] font-bold uppercase text-stone-400 block">Daily Return</span>
+                  <span className="font-display text-base font-bold text-white block mt-0.5">
                     +{formatUGX(calcDailyReturn)}
                   </span>
-                  <span className="text-[10px] text-forest-600 block">~{dailyRatePct}% / day</span>
+                  <span className="text-[10px] text-forest-400 block">~{dailyRatePct}% / day</span>
                 </div>
 
-                <div className="rounded-xl bg-white p-3 border border-stone-200">
-                  <span className="text-[10px] font-bold uppercase text-ink-500 block">Monthly Yield</span>
-                  <span className="font-display text-base font-bold text-forest-900 block mt-0.5">
+                <div className="rounded-xl bg-forest-900 p-3 border border-stone-800">
+                  <span className="text-[10px] font-bold uppercase text-stone-400 block">Monthly Yield</span>
+                  <span className="font-display text-base font-bold text-white block mt-0.5">
                     +{formatUGX(calcMonthlyReturn)}
                   </span>
-                  <span className="text-[10px] text-ink-500 block">per 30-day cycle</span>
+                  <span className="text-[10px] text-stone-400 block">per 30-day cycle</span>
                 </div>
 
-                <div className="rounded-xl bg-white p-3 border border-stone-200">
-                  <span className="text-[10px] font-bold uppercase text-ink-500 block">Total Profit ROI</span>
-                  <span className="font-display text-base font-bold text-emerald-700 block mt-0.5">
+                <div className="rounded-xl bg-forest-900 p-3 border border-stone-800">
+                  <span className="text-[10px] font-bold uppercase text-stone-400 block">Total Profit ROI</span>
+                  <span className="font-display text-base font-bold text-emerald-400 block mt-0.5">
                     +{formatUGX(calcTotalReturn)}
                   </span>
-                  <span className="text-[10px] text-emerald-700 font-bold block">+{returnPct}% Expected</span>
+                  <span className="text-[10px] text-emerald-500 font-bold block">+{returnPct}% Expected</span>
                 </div>
 
                 <div className="rounded-xl bg-forest-900 text-white p-3 border border-forest-800">
@@ -316,8 +316,8 @@ export default function InvestmentDetailModal({
 
             {/* Error or Success feedback banners */}
             {errorMsg && (
-              <div className="rounded-xl bg-red-50 border border-red-200 p-4 flex items-start gap-3 text-sm text-red-700">
-                <AlertCircle className="h-5 w-5 shrink-0 mt-0.5 text-red-600" />
+              <div className="rounded-xl bg-red-950/50 border border-red-800 p-4 flex items-start gap-3 text-sm text-red-200">
+                <AlertCircle className="h-5 w-5 shrink-0 mt-0.5 text-red-400" />
                 <div className="flex-1">
                   <p className="font-semibold">{errorMsg}</p>
                   {!hasSufficientFunds && onGoToDeposit && (
@@ -327,7 +327,7 @@ export default function InvestmentDetailModal({
                         onClose()
                         onGoToDeposit()
                       }}
-                      className="mt-2 text-xs font-bold text-red-800 underline hover:text-red-950"
+                      className="mt-2 text-xs font-bold text-red-300 underline hover:text-red-200"
                     >
                       Deposit funds to your wallet now →
                     </button>
@@ -337,15 +337,15 @@ export default function InvestmentDetailModal({
             )}
 
             {successMsg && (
-              <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 flex items-center gap-3 text-sm text-emerald-800">
-                <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+              <div className="rounded-xl bg-emerald-950/50 border border-emerald-800 p-4 flex items-center gap-3 text-sm text-emerald-200">
+                <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" />
                 <p className="font-semibold">{successMsg}</p>
               </div>
             )}
 
             {/* Trust and Risk Mitigation Note */}
-            <div className="flex items-start gap-3 rounded-xl bg-stone-50 p-4 text-xs text-ink-600 border border-stone-200">
-              <ShieldCheck className="h-4 w-4 text-forest-700 shrink-0 mt-0.5" />
+            <div className="flex items-start gap-3 rounded-xl bg-stone-900 p-4 text-xs text-stone-300 border border-stone-800">
+              <ShieldCheck className="h-4 w-4 text-forest-500 shrink-0 mt-0.5" />
               <p>
                 Operated under German agricultural standards with certified animal welfare and
                 biosecurity compliance. Projected returns and timelines are contractual and
@@ -356,12 +356,12 @@ export default function InvestmentDetailModal({
         </div>
 
         {/* Modal Footer / Invest Action */}
-        <div className="sticky bottom-0 z-20 border-t border-stone-200 bg-white p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+        <div className="sticky bottom-0 z-20 border-t border-stone-800 bg-forest-900 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3 shadow-lg">
           <div>
-            <span className="text-xs text-ink-500 block">Total Capital Commitment</span>
-            <div className="font-display text-xl font-bold text-forest-950">
+            <span className="text-xs text-stone-400 block">Total Capital Commitment</span>
+            <div className="font-display text-xl font-bold text-white">
               {formatUGX(investAmount)}{' '}
-              <span className="text-xs font-normal text-ink-500">
+              <span className="text-xs font-normal text-stone-400">
                 (Payout: {formatUGX(calcTotalPayout)})
               </span>
             </div>
@@ -371,7 +371,7 @@ export default function InvestmentDetailModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-stone-300 px-4 py-2.5 text-sm font-semibold text-ink-600 hover:bg-stone-50"
+              className="rounded-xl border border-stone-700 px-4 py-2.5 text-sm font-semibold text-stone-300 hover:bg-stone-800"
             >
               Cancel
             </button>

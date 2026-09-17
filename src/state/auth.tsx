@@ -36,12 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (currentUser) {
       setUser(currentUser)
       try {
-        try {
-          await supabase.rpc('credit_daily_investment_rewards')
-        } catch {
-          // Ignore reward-processing failures here; the wallet will still refresh from the current DB state.
-        }
-
+        await supabase.rpc('sync_investment_return_accruals')
         const [p, w] = await Promise.all([
           getProfile(currentUser.id),
           getWallet(currentUser.id),

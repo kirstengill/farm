@@ -37,6 +37,7 @@ export interface FarmProject {
   max_amount: number | null
   expected_return_pct: number
   duration_months: number
+  daily_return?: number | null
   target_amount: number
   funded_amount: number
   created_at: string
@@ -50,6 +51,12 @@ export interface Investment {
   amount: number
   status: 'pending' | 'active' | 'matured' | 'cancelled' | 'rejected'
   expected_return: number
+  daily_return?: number
+  returns_claimed_through?: string | null
+  earning_days?: number
+  accumulated_return?: number
+  claimable_return?: number
+  claimed_return?: number
   reference: string
   start_date: string | null
   maturity_date: string | null

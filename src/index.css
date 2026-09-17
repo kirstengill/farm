@@ -1,87 +1,11 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-display: "Fraunces", Georgia, serif;
 
-  --color-forest-950: #0d1f16;
-  --color-forest-900: #14291e;
-  --color-forest-800: #1e3a2b;
-  --color-forest-700: #2a4f3a;
-  --color-forest-600: #3a6b4f;
-  --color-forest-500: #4d8767;
-  --color-forest-100: #dde9e1;
-  --color-forest-50: #eff5f1;
-
-  --color-gold-600: #a8834a;
-  --color-gold-500: #c8a45c;
-  --color-gold-400: #d9bc82;
-  --color-gold-100: #f3ead6;
-
-  --color-clay-100: #f0ebe3;
-  --color-clay-200: #e2d9ca;
-  --color-ink-900: #17201a;
-  --color-ink-600: #4b5850;
-}
-
-html {
-  scroll-behavior: smooth;
-}
-
-body {
-  @apply bg-white text-ink-900 font-sans antialiased;
-}
-
-.font-display {
-  font-family: var(--font-display);
-}
-
-/* subtle entrance animations */
-@keyframes fw-fade-up {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.animate-fade-up {
-  animation: fw-fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.delay-1 { animation-delay: 0.08s; }
-.delay-2 { animation-delay: 0.16s; }
-.delay-3 { animation-delay: 0.24s; }
-.delay-4 { animation-delay: 0.32s; }
-
-@keyframes fw-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-.animate-fade { animation: fw-fade 0.4s ease both; }
-
-/* card hover lift */
-.card-lift {
-  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
-}
-.card-lift:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 20px 40px -18px rgba(20, 41, 30, 0.25);
-}
-
-/* progress bar shimmer */
-@keyframes fw-shimmer {
- 0% { background-position: -200% 0; }
- 100% { background-position: 200% 0; }
-}
-.shimmer {
-  background-image: linear-gradient(110deg, var(--color-forest-700) 30%, var(--color-forest-500) 50%, var(--color-forest-700) 70%);
-  background-size: 200% 100%;
-  animation: fw-shimmer 3.5s linear infinite;
-}
-
-::selection {
-  background: var(--color-gold-400);
-  color: var(--color-forest-950);
-}
-
-/* ---- Feldwert theme ---- */
-@theme {
   --color-forest-50: #f3f7f2;
   --color-forest-100: #e4ede2;
   --color-forest-500: #4a7c59;
@@ -104,24 +28,86 @@ body {
   --color-ink-500: #6b756d;
   --color-ink-600: #4a544c;
   --color-ink-900: #1a241d;
-
-  --font-display: "Fraunces", Georgia, serif;
 }
 
-.font-display { font-family: var(--font-display); }
+html {
+  scroll-behavior: smooth;
+}
 
-@keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes shimmer { 0%,100% { background-color: var(--color-forest-600); } 50% { background-color: var(--color-forest-500); } }
+body {
+  @apply bg-forest-950 text-stone-100 font-sans antialiased;
+}
 
-.animate-fade-up { animation: fadeUp .4s ease both; }
-.animate-rise { animation: rise .7s cubic-bezier(.22,1,.36,1) both; }
-.shimmer { animation: shimmer 2.4s ease-in-out infinite; }
+.dark body {
+  @apply bg-forest-950 text-stone-100;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* Entrance animations */
+@keyframes fw-fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up {
+  animation: fw-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.delay-1 { animation-delay: 0.08s; }
+.delay-2 { animation-delay: 0.16s; }
+.delay-3 { animation-delay: 0.24s; }
+.delay-4 { animation-delay: 0.32s; }
+
+@keyframes fw-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade {
+  animation: fw-fade 0.4s ease both;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-rise {
+  animation: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Card hover lift */
+.card-lift {
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
+}
+.card-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px -18px rgba(20, 41, 30, 0.25);
+}
+
+/* Progress bar shimmer */
+@keyframes fw-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background-image: linear-gradient(110deg, var(--color-forest-700) 30%, var(--color-forest-500) 50%, var(--color-forest-700) 70%);
+  background-size: 200% 100%;
+  animation: fw-shimmer 3.5s linear infinite;
+}
+
+::selection {
+  background: var(--color-gold-400);
+  color: var(--color-forest-950);
+}
 
 .admin-input {
   background: rgba(255,255,255,.08) !important;
   color: white !important;
   border-color: rgba(255,255,255,.15) !important;
 }
-.admin-input::placeholder { color: rgba(255,255,255,.35); }
-.admin-input:focus { border-color: var(--color-gold-500) !important; }
+.admin-input::placeholder {
+  color: rgba(255,255,255,.35);
+}
+.admin-input:focus {
+  border-color: var(--color-gold-500) !important;
+}

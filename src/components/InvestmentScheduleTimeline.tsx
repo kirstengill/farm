@@ -38,20 +38,20 @@ export default function InvestmentScheduleTimeline({
 
   if (compact) {
     return (
-      <div className={`rounded-xl border border-forest-900/10 bg-forest-50/50 p-3.5 ${className}`}>
-        <div className="flex items-center justify-between text-xs font-semibold text-forest-800 mb-2.5">
+      <div className={`rounded-xl border border-forest-900/10 bg-forest-950/40 p-3.5 ${className}`}>
+        <div className="flex items-center justify-between text-xs font-semibold text-stone-200 mb-2.5">
           <span className="inline-flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5 text-forest-600" />
+            <Clock className="h-3.5 w-3.5 text-forest-500" />
             Investment Schedule
           </span>
-          <span className="text-forest-600 font-medium">{durationMonths} Months Duration</span>
+          <span className="text-forest-400 font-medium">{durationMonths} Months Duration</span>
         </div>
 
         {/* Compact Horizontal Flow */}
         <div className="grid grid-cols-5 gap-1 items-center text-center">
           <div className="flex flex-col items-center">
-            <span className="text-[10px] uppercase tracking-wider text-ink-500 font-medium">Principal</span>
-            <span className="text-xs font-bold text-ink-900 mt-0.5">{formatUGX(amount)}</span>
+            <span className="text-[10px] uppercase tracking-wider text-stone-500 font-medium">Principal</span>
+            <span className="text-xs font-bold text-white mt-0.5">{formatUGX(amount)}</span>
           </div>
 
           <div className="flex justify-center text-forest-500">
@@ -59,8 +59,8 @@ export default function InvestmentScheduleTimeline({
           </div>
 
           <div className="flex flex-col items-center">
-            <span className="text-[10px] uppercase tracking-wider text-ink-500 font-medium">Period</span>
-            <span className="text-xs font-bold text-forest-800 mt-0.5">{durationMonths} Mo</span>
+            <span className="text-[10px] uppercase tracking-wider text-stone-500 font-medium">Period</span>
+            <span className="text-xs font-bold text-stone-200 mt-0.5">{durationMonths} Mo</span>
           </div>
 
           <div className="flex justify-center text-forest-500">
@@ -68,14 +68,14 @@ export default function InvestmentScheduleTimeline({
           </div>
 
           <div className="flex flex-col items-center">
-            <span className="text-[10px] uppercase tracking-wider text-gold-600 font-medium">Net Return</span>
-            <span className="text-xs font-bold text-forest-900 mt-0.5">+{formatUGX(calcTotalReturn)}</span>
+            <span className="text-[10px] uppercase tracking-wider text-gold-500 font-medium">Net Return</span>
+            <span className="text-xs font-bold text-white mt-0.5">+{formatUGX(calcTotalReturn)}</span>
           </div>
         </div>
 
-        <div className="mt-2.5 pt-2 border-t border-forest-900/5 flex items-center justify-between text-[11px] text-ink-600">
-          <span>Est. Daily: <strong className="text-forest-800">{formatUGX(calcDailyReturn)}</strong> ({dailyRatePct}%/d)</span>
-          <span>ROI: <strong className="text-emerald-700 font-bold">+{returnPct}%</strong></span>
+        <div className="mt-2.5 pt-2 border-t border-stone-800 flex items-center justify-between text-[11px] text-stone-400">
+          <span>Est. Daily: <strong className="text-stone-200">{formatUGX(calcDailyReturn)}</strong> ({dailyRatePct}%/d)</span>
+          <span>ROI: <strong className="text-emerald-500 font-bold">+{returnPct}%</strong></span>
         </div>
       </div>
     )
@@ -87,28 +87,28 @@ export default function InvestmentScheduleTimeline({
       value: formatUGX(amount),
       sub: 'Allocated Capital',
       icon: DollarSign,
-      color: 'bg-forest-100 text-forest-800 border-forest-300',
+      color: 'bg-forest-900 text-stone-200 border-stone-700',
     },
     {
       label: 'Investment Period',
       value: `${durationMonths} Months`,
       sub: `Started ${formatDate(sDate.toISOString())}`,
       icon: Calendar,
-      color: 'bg-forest-100 text-forest-800 border-forest-300',
+      color: 'bg-forest-900 text-stone-200 border-stone-700',
     },
     {
       label: 'Daily Return',
       value: `+${formatUGX(calcDailyReturn)}`,
       sub: `~${dailyRatePct}% yield per day`,
       icon: Coins,
-      color: 'bg-gold-100 text-gold-700 border-gold-300',
+      color: 'bg-gold-900/40 text-gold-300 border-gold-700',
     },
     {
       label: 'Total Expected Return',
       value: `+${formatUGX(calcTotalReturn)}`,
       sub: `Total ROI: +${returnPct}%`,
       icon: TrendingUp,
-      color: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+      color: 'bg-emerald-900/40 text-emerald-300 border-emerald-700',
     },
     {
       label: 'Completion Date',
@@ -120,18 +120,18 @@ export default function InvestmentScheduleTimeline({
   ]
 
   return (
-    <div className={`rounded-2xl border border-forest-900/10 bg-white p-5 sm:p-6 shadow-sm ${className}`}>
+    <div className={`rounded-2xl border border-stone-800 bg-forest-900 p-5 sm:p-6 shadow-sm ${className}`}>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
         <div>
-          <h4 className="font-display text-base sm:text-lg font-bold text-forest-950">
+          <h4 className="font-display text-base sm:text-lg font-bold text-white">
             Investment Schedule & Lifecycle
           </h4>
-          <p className="text-xs text-ink-500 mt-0.5">
+          <p className="text-xs text-stone-400 mt-0.5">
             Clear, transparent milestone flow from capital allocation to maturity payout.
           </p>
         </div>
-        <span className="inline-flex items-center gap-1 rounded-full bg-forest-50 px-3 py-1 text-xs font-semibold text-forest-700 border border-forest-200">
-          <Clock className="h-3.5 w-3.5 text-forest-600" />
+        <span className="inline-flex items-center gap-1 rounded-full bg-forest-950 px-3 py-1 text-xs font-semibold text-stone-300 border border-stone-800">
+          <Clock className="h-3.5 w-3.5 text-forest-500" />
           {durationMonths} Months Program
         </span>
       </div>
@@ -139,7 +139,7 @@ export default function InvestmentScheduleTimeline({
       {/* Desktop / Tablet Timeline Flow */}
       <div className="relative hidden md:grid grid-cols-5 gap-3">
         {/* Continuous Connecting Line */}
-        <div className="absolute top-6 left-10 right-10 h-0.5 bg-gradient-to-r from-forest-400 via-gold-400 to-forest-800 z-0" />
+        <div className="absolute top-6 left-10 right-10 h-0.5 bg-gradient-to-r from-forest-500 via-gold-500 to-forest-700 z-0" />
 
         {steps.map((step, idx) => {
           const Icon = step.icon
@@ -150,13 +150,13 @@ export default function InvestmentScheduleTimeline({
               >
                 <Icon className="h-5 w-5" />
               </div>
-              <span className="mt-3 text-[11px] font-bold uppercase tracking-wider text-ink-500">
+              <span className="mt-3 text-[11px] font-bold uppercase tracking-wider text-stone-400">
                 {step.label}
               </span>
-              <span className="mt-1 font-display text-sm sm:text-base font-bold text-forest-950">
+              <span className="mt-1 font-display text-sm sm:text-base font-bold text-white">
                 {step.value}
               </span>
-              <span className="mt-0.5 text-[11px] text-ink-500 font-medium">
+              <span className="mt-0.5 text-[11px] text-stone-400 font-medium">
                 {step.sub}
               </span>
             </div>
@@ -172,7 +172,7 @@ export default function InvestmentScheduleTimeline({
           return (
             <div key={idx} className="flex items-start gap-3 relative">
               {!isLast && (
-                <div className="absolute left-5 top-10 bottom-0 w-0.5 bg-forest-200" />
+                <div className="absolute left-5 top-10 bottom-0 w-0.5 bg-stone-800" />
               )}
               <div
                 className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 shadow-xs z-10 ${step.color}`}
@@ -181,14 +181,14 @@ export default function InvestmentScheduleTimeline({
               </div>
               <div className="flex-1 pb-1">
                 <div className="flex items-baseline justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-ink-500">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-stone-400">
                     {step.label}
                   </span>
-                  <span className="font-display text-sm font-bold text-forest-950">
+                  <span className="font-display text-sm font-bold text-white">
                     {step.value}
                   </span>
                 </div>
-                <p className="text-xs text-ink-600 mt-0.5">{step.sub}</p>
+                <p className="text-xs text-stone-400 mt-0.5">{step.sub}</p>
               </div>
             </div>
           )
@@ -196,16 +196,16 @@ export default function InvestmentScheduleTimeline({
       </div>
 
       {/* Financial Summary Highlight Banner */}
-      <div className="mt-6 rounded-xl bg-forest-900 text-white p-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="mt-6 rounded-xl bg-forest-950 text-white p-4 flex flex-wrap items-center justify-between gap-3 border border-stone-800">
         <div>
-          <span className="text-xs text-forest-200">Total Projected Payout at Maturity</span>
+          <span className="text-xs text-stone-400">Total Projected Payout at Maturity</span>
           <div className="font-display text-xl sm:text-2xl font-bold text-gold-400">
             {formatUGX(amount + calcTotalReturn)}
           </div>
         </div>
         <div className="text-right">
-          <span className="text-xs text-forest-200">Net Expected Profit</span>
-          <div className="text-base sm:text-lg font-bold text-emerald-300">
+          <span className="text-xs text-stone-400">Net Expected Profit</span>
+          <div className="text-base sm:text-lg font-bold text-emerald-400">
             +{formatUGX(calcTotalReturn)} (+{returnPct}%)
           </div>
         </div>

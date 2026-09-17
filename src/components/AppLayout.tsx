@@ -98,32 +98,32 @@ export default function AppLayout({
   ]
 
   return (
-    <div className="min-h-screen bg-[#f8f9f6] text-ink-900 flex flex-col antialiased">
+    <div className="min-h-screen bg-forest-950 text-stone-100 flex flex-col antialiased">
       {/* ================= USER DASHBOARD TOP NAVIGATION ================= */}
-      <header className="sticky top-0 z-40 flex items-center border-b border-stone-200/80 bg-white px-4 sm:px-6 lg:px-8 py-3.5 shadow-xs">
+      <header className="sticky top-0 z-40 flex items-center border-b border-stone-800/80 bg-forest-900 px-4 sm:px-6 lg:px-8 py-3.5 shadow-xs">
         <Link to="/dashboard" className="focus:outline-none">
-          <Logo />
+          <Logo light />
         </Link>
       </header>
 
       <div className="flex-1 flex flex-col md:flex-row min-w-0">
         {/* ================= DESKTOP SIDEBAR ================= */}
-        <aside className="hidden md:flex md:w-64 lg:w-72 flex-col shrink-0 border-r border-stone-200/80 bg-white p-5 sticky top-[57px] h-[calc(100vh-57px)] z-30 justify-between">
+        <aside className="hidden md:flex md:w-64 lg:w-72 flex-col shrink-0 border-r border-stone-800/80 bg-forest-900 p-5 sticky top-[57px] h-[calc(100vh-57px)] z-30 justify-between">
           <div className="space-y-6">
 
           {/* User Quick Card */}
-          <div className="rounded-2xl border border-stone-200/80 bg-stone-50/70 p-3.5 flex items-center gap-3">
+          <div className="rounded-2xl border border-stone-800/80 bg-stone-900/70 p-3.5 flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-forest-800 font-display font-bold text-white shadow-xs">
               {(profile?.full_name || profile?.username || 'U')[0].toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <p className="truncate text-xs font-bold text-forest-950">
+                <p className="truncate text-xs font-bold text-white">
                   {profile?.full_name || profile?.username || 'Investor'}
                 </p>
-                <CheckCircle2 className="h-3 w-3 text-emerald-600 shrink-0" />
+                <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
               </div>
-              <p className="truncate text-[11px] text-ink-500 font-mono">
+              <p className="truncate text-[11px] text-stone-400 font-mono">
                 @{profile?.username || 'investor'}
               </p>
             </div>
@@ -131,7 +131,7 @@ export default function AppLayout({
 
           {/* Primary Navigation */}
           <nav className="space-y-1">
-            <span className="px-3 text-[10px] font-bold uppercase tracking-wider text-ink-500">
+            <span className="px-3 text-[10px] font-bold uppercase tracking-wider text-stone-500">
               Platform Menu
             </span>
             <div className="pt-1.5 space-y-1">
@@ -146,13 +146,13 @@ export default function AppLayout({
                     className={`group flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-all ${
                       item.isActive
                         ? 'bg-forest-800 text-white shadow-xs'
-                        : 'text-ink-600 hover:bg-forest-50/70 hover:text-forest-900'
+                        : 'text-stone-300 hover:bg-stone-800/70 hover:text-white'
                     }`}
                   >
                     <div className="flex items-center gap-3">
                       <Icon
                         className={`h-4 w-4 transition-colors ${
-                          item.isActive ? 'text-gold-400' : 'text-forest-700 group-hover:text-forest-900'
+                          item.isActive ? 'text-gold-400' : 'text-forest-500 group-hover:text-forest-400'
                         }`}
                       />
                       <span>{item.label}</span>
@@ -162,7 +162,7 @@ export default function AppLayout({
                         className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
                           item.isActive
                             ? 'bg-white/20 text-white'
-                            : 'bg-forest-100 text-forest-800'
+                            : 'bg-forest-900 text-forest-300'
                         }`}
                       >
                         {item.badge}
@@ -177,7 +177,7 @@ export default function AppLayout({
           {/* Admin link if user has admin privileges */}
           {userIsAdmin && (
             <div className="pt-2">
-              <span className="px-3 text-[10px] font-bold uppercase tracking-wider text-ink-500">
+              <span className="px-3 text-[10px] font-bold uppercase tracking-wider text-stone-500">
                 Administration
               </span>
               <div className="pt-1.5">
@@ -187,14 +187,14 @@ export default function AppLayout({
                   className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-colors ${
                     isAdmin
                       ? 'bg-forest-950 text-gold-400 shadow-xs'
-                      : 'text-ink-600 hover:bg-forest-50 hover:text-forest-950'
+                      : 'text-stone-300 hover:bg-stone-800 hover:text-white'
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <Shield className="h-4 w-4 text-gold-500" />
                     <span>Admin Operations</span>
                   </div>
-                  <span className="rounded-md bg-gold-400/20 px-1.5 py-0.5 text-[10px] font-bold text-gold-700">
+                  <span className="rounded-md bg-gold-400/20 px-1.5 py-0.5 text-[10px] font-bold text-gold-400">
                     Staff
                   </span>
                 </Link>
@@ -239,12 +239,12 @@ export default function AppLayout({
         </div>
 
         {/* Footer / Sign Out */}
-        <div className="pt-4 border-t border-stone-100">
+        <div className="pt-4 border-t border-stone-800">
           <button
             id="btn-sidebar-signout"
             type="button"
             onClick={signOut}
-            className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-ink-600 hover:bg-red-50 hover:text-red-700 transition-colors"
+            className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-stone-300 hover:bg-red-900/30 hover:text-red-300 transition-colors"
           >
             <LogOut className="h-4 w-4" />
             <span>Sign Out</span>
@@ -260,7 +260,7 @@ export default function AppLayout({
 
       {/* ================= MOBILE BOTTOM NAVIGATION ================= */}
       {/* Exactly 5 items as requested: Dashboard, Investments, Transactions, Referrals, Profile */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-stone-200 px-2 py-1.5 flex items-center justify-around shadow-lg">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-forest-900/95 backdrop-blur-md border-t border-stone-800 px-2 py-1.5 flex items-center justify-around shadow-lg">
         {navItems.map((item) => {
           const Icon = item.icon
           return (
@@ -271,13 +271,13 @@ export default function AppLayout({
               onClick={item.action}
               className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl text-[11px] font-semibold transition-all min-w-[58px] ${
                 item.isActive
-                  ? 'text-forest-800 font-bold'
-                  : 'text-ink-500 hover:text-forest-700'
+                  ? 'text-gold-400 font-bold'
+                  : 'text-stone-400 hover:text-stone-200'
               }`}
             >
               <div
                 className={`p-1 rounded-lg transition-colors ${
-                  item.isActive ? 'bg-forest-100 text-forest-800' : 'text-ink-500'
+                  item.isActive ? 'bg-forest-800 text-gold-400' : 'text-stone-400'
                 }`}
               >
                 <Icon className="h-4 w-4" />
