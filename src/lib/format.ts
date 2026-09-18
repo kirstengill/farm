@@ -35,6 +35,15 @@ export const formatRelativeDays = (iso: string | null | undefined) => {
   return `${diffDays} days remaining`
 }
 
+export function durationToDays(durationMonths: number | null | undefined): number {
+  const m = Number(durationMonths) || 1
+  return m * 30
+}
+
+export function formatDurationDays(durationMonths: number | null | undefined): string {
+  return `${durationToDays(durationMonths)} Days`
+}
+
 export function calculateInvestmentSchedule(
   amount: number,
   returnPct: number,
@@ -42,6 +51,7 @@ export function calculateInvestmentSchedule(
 ) {
   const totalReturn = Math.round((amount * returnPct) / 100)
   const totalPayout = amount + totalReturn
+  const durationDays = durationToDays(durationMonths)
   const monthlyReturn = durationMonths > 0 ? Math.round(totalReturn / durationMonths) : 0
   const dailyReturn = durationMonths > 0 ? Math.round(totalReturn / (durationMonths * 30)) : 0
   const dailyRatePct =
@@ -56,6 +66,7 @@ export function calculateInvestmentSchedule(
     amount,
     returnPct,
     durationMonths,
+    durationDays,
     totalReturn,
     totalPayout,
     monthlyReturn,

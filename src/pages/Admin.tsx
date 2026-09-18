@@ -897,6 +897,11 @@ export default function Admin() {
                             )}
                           </div>
                         )}
+                        {t.type === 'deposit' && (
+                          <div className="text-[11px] text-gold-300 font-mono mt-0.5">
+                            To: 0763445008 (huzairu ssali)
+                          </div>
+                        )}
                         <p className="text-xs text-stone-400 mt-0.5">
                           Ref: <span className="font-mono text-stone-300">{t.reference}</span> ·{' '}
                           {formatDate(t.created_at)}
@@ -1011,6 +1016,11 @@ export default function Admin() {
                               {String((t.meta as any)?.provider || t.method).replace('_', ' ')}
                             </span>
                           )}
+                        </div>
+                      )}
+                      {t.type === 'deposit' && (
+                        <div className="text-xs text-gold-300 font-mono">
+                          Recipient Account: 0763445008 (huzairu ssali)
                         </div>
                       )}
                       <p className="text-xs text-stone-400">
@@ -1132,7 +1142,7 @@ export default function Admin() {
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">
-                      Term Duration (Months)
+                      Term Duration ({farmForm.duration_months * 30} Days)
                     </label>
                     <input
                       type="number"
@@ -1256,7 +1266,7 @@ export default function Admin() {
                               +{formatUGX(totalExp)} total exp.
                             </span>
                             <span>·</span>
-                            <span>{roiPct}% p.a. ({duration} mo)</span>
+                            <span>{roiPct}% p.a. ({duration * 30} days)</span>
                           </div>
                         </div>
                       </div>
@@ -1386,8 +1396,8 @@ export default function Admin() {
         )}
 
         {editingUser && userDraft && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111713]/80 p-4">
-            <div className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#141b18] p-6 shadow-2xl">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111713]/80 p-3 sm:p-4 overflow-y-auto">
+            <div className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#141b18] p-6 shadow-2xl max-h-[90vh] overflow-y-auto my-auto">
               <div className="mb-5 flex items-center justify-between gap-3 border-b border-white/10 pb-4">
                 <div>
                   <p className="text-[10px] uppercase tracking-[0.2em] text-gold-400">User editor</p>
@@ -1623,7 +1633,7 @@ export default function Admin() {
 
                     <div>
                       <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-stone-400">
-                        Duration (Months)
+                        Duration ({farmEditDraft.duration_months * 30} Days / {farmEditDraft.duration_months} mo)
                       </label>
                       <input
                         type="number"
@@ -1698,7 +1708,7 @@ export default function Admin() {
                         className="w-full rounded-xl border border-gold-500/40 bg-black/50 px-3.5 py-2.5 text-base text-gold-300 font-bold outline-none focus:border-gold-400"
                       />
                       <span className="text-[10px] text-stone-400 mt-1 block">
-                        +{formatUGX(farmEditDraft.total_expected_income)} total profit over {farmEditDraft.duration_months} months
+                        +{formatUGX(farmEditDraft.total_expected_income)} total profit over {farmEditDraft.duration_months * 30} days
                       </span>
                     </div>
                   </div>

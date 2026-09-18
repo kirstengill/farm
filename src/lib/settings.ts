@@ -1,6 +1,12 @@
 import { supabase } from './supabase'
 import type { PlatformSettings } from './types'
 
+export const DEPOSIT_PHONE = '0763445008'
+export const DEPOSIT_RECIPIENT_NAME = 'Huzairu Ssali'
+export const WHATSAPP_HELPLINE = '0763445008'
+export const WHATSAPP_HELPLINE_INTERNATIONAL = '+256763445008'
+export const WHATSAPP_LINK = 'https://wa.me/256763445008'
+
 export const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
   min_deposit: 10000,
   min_withdrawal: 10000,
@@ -9,6 +15,9 @@ export const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
   currency: 'UGX',
   referral_bonus_pct: 10,
   brand_name: 'Feldwert Capital',
+  deposit_phone: DEPOSIT_PHONE,
+  deposit_recipient_name: DEPOSIT_RECIPIENT_NAME,
+  whatsapp_helpline: WHATSAPP_HELPLINE,
 }
 
 /**

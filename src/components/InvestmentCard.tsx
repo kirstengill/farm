@@ -1,6 +1,6 @@
 import { Calendar, ChevronRight, Coins, MapPin, ShieldCheck, TrendingUp, Users } from 'lucide-react'
 import type { FarmProject } from '../lib/types'
-import { formatUGX } from '../lib/format'
+import { formatUGX, formatDurationDays } from '../lib/format'
 import { calculateInvestmentDailyReturn } from '../lib/investmentReturns'
 import FarmImage from './FarmImage'
 import { farmArtFor } from '../lib/farmArt'
@@ -140,7 +140,7 @@ export default function InvestmentCard({
               <span className="text-[11px] font-medium text-ink-500 block">Investment Schedule</span>
               <div className="inline-flex items-center gap-1 text-forest-800 font-semibold text-sm mt-0.5">
                 <Calendar className="h-3.5 w-3.5 text-forest-600" />
-                <span>{project.duration_months} Months</span>
+                <span>{formatDurationDays(project.duration_months)}</span>
               </div>
               <span className="text-[10px] text-forest-600 font-medium block">Fixed Term</span>
             </div>

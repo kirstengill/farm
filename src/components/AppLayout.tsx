@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   LayoutDashboard,
   LogOut,
+  MessageCircle,
   Plus,
   Share2,
   Shield,
@@ -236,6 +237,34 @@ export default function AppLayout({
               </button>
             </div>
           </div>
+
+          {/* WhatsApp Support Helpline Card */}
+          <div className="rounded-2xl border border-emerald-800/40 bg-emerald-950/25 p-3.5 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-1.5 font-bold text-emerald-400">
+                <MessageCircle className="h-4 w-4" />
+                <span>WhatsApp Helpline</span>
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Online
+              </span>
+            </div>
+            <div className="text-[11px] text-stone-300">
+              <div className="font-mono font-bold text-white text-xs">0763445008</div>
+              <div className="text-[10px] text-stone-400">Recipient: huzairu ssali</div>
+            </div>
+            <a
+              id="sidebar-whatsapp-link"
+              href="https://wa.me/256763445008?text=Hello%20Huzairu,%20I%20need%20assistance%20with%20Feldwert%20Capital."
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-1.5 w-full rounded-xl bg-emerald-700/70 hover:bg-emerald-600 text-white py-1.5 text-xs font-semibold transition-colors shadow-xs"
+            >
+              <MessageCircle className="h-3.5 w-3.5" />
+              <span>Chat on WhatsApp</span>
+            </a>
+          </div>
         </div>
 
         {/* Footer / Sign Out */}
@@ -257,6 +286,29 @@ export default function AppLayout({
           {children}
         </main>
       </div>
+
+      {/* Floating WhatsApp Helpline Button */}
+      <aside aria-label="Support contacts" className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-40">
+        <a
+          id="floating-whatsapp-helpline"
+          href="https://wa.me/256763445008?text=Hello%20Huzairu,%20I%20am%20reaching%20out%20via%20the%20Feldwert%20WhatsApp%20Helpline"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="WhatsApp Helpline: 0763445008 (huzairu ssali)"
+          className="group flex items-center gap-2 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white p-3 md:px-4 md:py-2.5 shadow-xl hover:shadow-2xl transition-all duration-200 border border-emerald-400/40"
+        >
+          <div className="relative">
+            <MessageCircle className="h-5 w-5" />
+            <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-200" />
+            </span>
+          </div>
+          <span className="hidden md:inline text-xs font-bold whitespace-nowrap">
+            WhatsApp Help: 0763445008
+          </span>
+        </a>
+      </aside>
 
       {/* ================= MOBILE BOTTOM NAVIGATION ================= */}
       {/* Exactly 5 items as requested: Dashboard, Investments, Transactions, Referrals, Profile */}

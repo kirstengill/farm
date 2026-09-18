@@ -643,6 +643,59 @@ class MockQueryBuilder {
 
   private executeQuery(): any[] {
     const state = loadState()
+
+    if (this.tableName === 'platform_settings') {
+      const canonical: any = {
+        id: true,
+        min_deposit: 10000,
+        min_withdrawal: 10000,
+        withdrawal_lock_days: 0,
+        withdrawal_lock_enabled: false,
+        currency: 'UGX',
+        referral_bonus_pct: 10,
+        brand_name: 'Feldwert Capital',
+        deposit_phone: '0763445008',
+        deposit_recipient_name: 'Huzairu Ssali',
+        whatsapp_helpline: '0763445008',
+        updated_at: new Date().toISOString(),
+      }
+      for (const row of state.platform_settings || []) {
+        if (row && typeof row === 'object') {
+          if ('key' in row) {
+            canonical[row.key] = row.value
+          } else {
+            Object.assign(canonical, row)
+          }
+        }
+      }
+
+      // Check if filtering for a specific key (like .eq('key', '...'))
+      const hasKeyFilter = this.filters.some((f) => {
+        try {
+          return !f(canonical)
+        } catch {
+          return false
+        }
+      })
+
+      // If querying for key-value array vs canonical single row
+      if (this.filters.length === 0) {
+        return [canonical]
+      }
+
+      let data = [canonical]
+      for (const filter of this.filters) {
+        data = data.filter(filter)
+      }
+      if (data.length > 0) return data
+      // Fallback to raw list if querying by key directly
+      let rawList = (state.platform_settings || []) as any[]
+      for (const filter of this.filters) {
+        rawList = rawList.filter(filter)
+      }
+      return rawList
+    }
+
     let data: any[] = (state[this.tableName] || []) as any[]
 
     for (const filter of this.filters) {
@@ -727,6 +780,19 @@ class MockQueryBuilder {
           error: { message: 'Unauthorized. Administrator privileges required to modify platform settings.' },
         }
       }
+      state.platform_settings = Array.isArray(state.platform_settings) ? state.platform_settings : []
+      for (const [key, value] of Object.entries(patch)) {
+        if (key === 'id') continue
+        const existing = state.platform_settings.find((r) => r.key === key)
+        if (existing) {
+          existing.value = value
+          existing.updated_at = new Date().toISOString()
+        } else {
+          state.platform_settings.push({ key, value, updated_at: new Date().toISOString() })
+        }
+      }
+      saveState(state)
+      return { data: 1, error: null }
     }
 
     const list = (state[this.tableName] as any[]) || []
@@ -1033,6 +1099,9 @@ export const mockSupabase = {
           phone: p_phone,
           mobile_number: p_phone,
           sender_phone: p_phone,
+          recipient_phone: '0763445008',
+          recipient_name: 'Huzairu Ssali',
+          recipient: '0763445008 (Huzairu Ssali)',
           provider: methodLabel,
           country: 'Uganda',
           network: p_method === 'airtel_money' ? 'Airtel' : 'MTN',

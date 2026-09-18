@@ -25,9 +25,10 @@ export default function InvestmentScheduleTimeline({
   compact = false,
   className = '',
 }: TimelineProps) {
+  const durationDays = Math.max(1, durationMonths) * 30
   const calcDailyReturn = dailyReturn ?? calculateInvestmentDailyReturn(amount)
   const calcTotalReturn =
-    totalReturn ?? Math.round(calcDailyReturn * Math.max(1, durationMonths) * 30 * 100) / 100
+    totalReturn ?? Math.round(calcDailyReturn * durationDays * 100) / 100
 
   const sDate = startDate ? new Date(startDate) : new Date()
   const cDate = completionDate
@@ -44,7 +45,7 @@ export default function InvestmentScheduleTimeline({
             <Clock className="h-3.5 w-3.5 text-forest-500" />
             Investment Schedule
           </span>
-          <span className="text-forest-400 font-medium">{durationMonths} Months Duration</span>
+          <span className="text-forest-400 font-medium">{durationDays} Days Duration</span>
         </div>
 
         {/* Compact Horizontal Flow */}
@@ -60,7 +61,7 @@ export default function InvestmentScheduleTimeline({
 
           <div className="flex flex-col items-center">
             <span className="text-[10px] uppercase tracking-wider text-stone-500 font-medium">Period</span>
-            <span className="text-xs font-bold text-stone-200 mt-0.5">{durationMonths} Mo</span>
+            <span className="text-xs font-bold text-stone-200 mt-0.5">{durationDays} Days</span>
           </div>
 
           <div className="flex justify-center text-forest-500">
@@ -91,7 +92,7 @@ export default function InvestmentScheduleTimeline({
     },
     {
       label: 'Investment Period',
-      value: `${durationMonths} Months`,
+      value: `${durationDays} Days`,
       sub: `Started ${formatDate(sDate.toISOString())}`,
       icon: Calendar,
       color: 'bg-forest-900 text-stone-200 border-stone-700',
@@ -132,7 +133,7 @@ export default function InvestmentScheduleTimeline({
         </div>
         <span className="inline-flex items-center gap-1 rounded-full bg-forest-950 px-3 py-1 text-xs font-semibold text-stone-300 border border-stone-800">
           <Clock className="h-3.5 w-3.5 text-forest-500" />
-          {durationMonths} Months Program
+          {durationDays} Days Program
         </span>
       </div>
 

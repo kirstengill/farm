@@ -86,6 +86,7 @@ export default function Dashboard() {
   const [selectedInvForTimeline, setSelectedInvForTimeline] = useState<Investment | null>(null)
   const [copiedCode, setCopiedCode] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
+  const [copiedDepositPhone, setCopiedDepositPhone] = useState(false)
   const [shareToast, setShareToast] = useState('')
   const [shareMenuOpen, setShareMenuOpen] = useState(false)
   const [referredUsers, setReferredUsers] = useState<Profile[]>([])
@@ -284,17 +285,27 @@ export default function Dashboard() {
           modal === 'deposit' && data && typeof data === 'object' && 'reference' in data
             ? String(data.reference)
             : clientReference
-        setSuccessMsg(
-          `${modal === 'deposit' ? 'Deposit' : 'Withdrawal'} request for ${formatUGX(
-            amt
-          )} via ${providerName} (${phoneContact.trim()}) submitted${
-            createdReference ? ` with reference ${createdReference}` : ''
-          }. Awaiting settlement confirmation.`
-        )
+        if (modal === 'deposit') {
+          setSuccessMsg(
+            `Deposit request for ${formatUGX(
+              amt
+            )} submitted! Sent to recipient 0763445008 (huzairu ssali) from ${phoneContact.trim()}${
+              createdReference ? ` with reference ${createdReference}` : ''
+            }. Your wallet will be credited once verified.`
+          )
+        } else {
+          setSuccessMsg(
+            `Withdrawal request for ${formatUGX(
+              amt
+            )} via ${providerName} (${phoneContact.trim()}) submitted${
+              createdReference ? ` with reference ${createdReference}` : ''
+            }. Awaiting settlement confirmation.`
+          )
+        }
         setAmount('')
         setDepositTxRef('')
         setModal(null)
-        window.setTimeout(() => setSuccessMsg(''), 6000)
+        window.setTimeout(() => setSuccessMsg(''), 7000)
 
         // Reload data
         await loadDashboardData()
@@ -1069,12 +1080,15 @@ export default function Dashboard() {
                             />
                           </div>
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                               <span className="text-[10px] font-bold uppercase tracking-wider text-forest-700">
                                 {farm?.category || 'Program'}
                               </span>
                               <span className="rounded-full bg-emerald-50 text-emerald-800 px-2.5 py-0.5 text-xs font-semibold">
                                 {inv.status}
+                              </span>
+                              <span className="rounded-full bg-forest-50 text-forest-800 px-2.5 py-0.5 text-xs font-semibold">
+                                {durationMonths * 30} Days Term
                               </span>
                             </div>
                             <h3 className="font-display text-lg font-bold text-forest-950">
@@ -1223,32 +1237,77 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2">
                     <Smartphone className="h-5 w-5 text-forest-500" />
                     <h3 className="font-display text-base font-bold text-white">
-                      Uganda Mobile Money Settlement Details
+                      Official Deposit Account & Instructions
                     </h3>
                   </div>
                   <span className="rounded-full bg-emerald-950/40 text-emerald-300 text-[10px] font-bold px-2.5 py-0.5 border border-emerald-800/50">
-                    Automated & Instant
+                    MTN & Airtel Supported
                   </span>
                 </div>
-                <p className="text-xs text-ink-600 leading-relaxed">
-                  Deposit funds directly using MTN Mobile Money or Airtel Money Uganda. Always provide your personal investor reference so the system matches your account balance.
+                <p className="text-xs text-stone-300 leading-relaxed">
+                  Deposit funds directly using Uganda Mobile Money (MTN MoMo or Airtel Money). Send money to the verified recipient number below, then click <strong className="text-white">Deposit</strong> to register your transaction.
                 </p>
 
-                <div className="rounded-2xl border border-stone-800 bg-stone-900/60 p-4 text-xs border border-stone-200">
-                  <div>
-                    <span className="text-stone-400 font-medium">MTN MoMo Merchant</span>
-                    <p className="font-bold text-white mt-0.5">Code: 984210</p>
-                    <p className="text-[10px] text-stone-500 font-mono mt-0.5">Dial *165*3#</p>
+                <div className="rounded-2xl border border-gold-500/30 bg-forest-950/70 p-4 text-xs space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-forest-900/90 border border-stone-800 p-3">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">
+                        Deposit Recipient Number
+                      </span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="font-mono text-lg font-black text-white">0763445008</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText('0763445008')
+                            setCopiedDepositPhone(true)
+                            setTimeout(() => setCopiedDepositPhone(false), 2500)
+                          }}
+                          className="inline-flex items-center gap-1 rounded-md bg-forest-800 hover:bg-forest-700 px-2 py-0.5 text-[11px] font-semibold text-stone-200 transition-colors border border-stone-700"
+                        >
+                          <Copy className="h-3 w-3" />
+                          <span>{copiedDepositPhone ? 'Copied!' : 'Copy'}</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div className="rounded-xl bg-forest-900/90 border border-stone-800 p-3">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">
+                        Registered Recipient Name
+                      </span>
+                      <p className="font-mono font-bold text-gold-400 text-sm mt-1">
+                        huzairu ssali
+                      </p>
+                      <p className="text-[10px] text-emerald-400 mt-0.5">
+                        ✓ Always confirm this recipient name before completing payment
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-stone-400 font-medium">Airtel Money Pay</span>
-                    <p className="font-bold text-white mt-0.5">Code: 771920</p>
-                    <p className="text-[10px] text-stone-500 font-mono mt-0.5">Dial *185*9#</p>
-                  </div>
-                  <div>
-                    <span className="text-stone-400 font-medium">Personal Reference</span>
-                    <p className="font-bold text-gold-400 font-mono mt-0.5">{profile?.username}-DEP</p>
-                    <p className="text-[10px] text-stone-500 mt-0.5">Auto-credits wallet</p>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-stone-800 text-[11px]">
+                    <div className="flex items-center gap-2 text-stone-300">
+                      <span className="text-stone-400">Need deposit help?</span>
+                      <a
+                        href="https://wa.me/256763445008?text=Hello%20Huzairu,%20I%20am%20making%20a%20deposit%20and%20need%20assistance."
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-bold"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" />
+                        WhatsApp Support (0763445008)
+                      </a>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setModal('deposit')
+                        setErr('')
+                        setMsg('')
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-forest-700 hover:bg-forest-600 text-white px-3.5 py-1.5 font-bold transition-colors"
+                    >
+                      <Plus className="h-3.5 w-3.5 text-gold-400" />
+                      <span>Deposit Funds Now</span>
+                    </button>
                   </div>
                 </div>
 
@@ -1256,7 +1315,7 @@ export default function Dashboard() {
                   <div className="text-xs">
                     <span className="font-bold text-white block">Withdrawal Settlement Policy</span>
                     <span className="text-stone-400 text-[11px]">
-                      Withdrawals are settled directly to the phone number registered on your profile.
+                      Withdrawals are settled directly to your registered mobile money account.
                     </span>
                   </div>
                   <button
@@ -1307,9 +1366,15 @@ export default function Dashboard() {
                           </td>
                           <td className="py-3.5 text-stone-400">{formatDate(t.created_at)}</td>
                           <td className="py-3.5 font-mono text-[11px] text-stone-400">
-                            <div>{t.reference}</div>
+                            <div className="font-bold text-stone-200">{t.reference}</div>
+                            {t.type === 'deposit' && (
+                              <div className="text-[10px] text-gold-400 font-sans font-medium">
+                                To: 0763445008 (huzairu ssali)
+                              </div>
+                            )}
                             {((t.meta as any)?.phone || (t.meta as any)?.mobile_number) && (
                               <div className="text-[10px] text-emerald-400 font-mono">
+                                {t.type === 'deposit' ? 'From: ' : ''}
                                 {String((t.meta as any)?.phone || (t.meta as any)?.mobile_number)}
                               </div>
                             )}
@@ -1661,6 +1726,34 @@ export default function Dashboard() {
                 </div>
               </div>
 
+              {/* WhatsApp Support Helpline */}
+              <div className="rounded-2xl border border-emerald-800/40 bg-forest-950/60 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-2 text-xs font-bold text-white">
+                    <MessageCircle className="h-4 w-4 text-emerald-400" />
+                    Official WhatsApp Helpline
+                  </span>
+                  <span className="rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 text-[10px] font-bold">
+                    Direct Support
+                  </span>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
+                  <div>
+                    <p className="font-mono text-base font-bold text-emerald-300">0763445008</p>
+                    <p className="text-[11px] text-stone-400">Recipient / Contact Name: <strong className="text-white">huzairu ssali</strong></p>
+                  </div>
+                  <a
+                    href="https://wa.me/256763445008?text=Hello%20Huzairu,%20I%20am%20contacting%20Feldwert%20support"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 text-xs font-bold transition-colors shadow-xs"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    <span>Open WhatsApp Chat</span>
+                  </a>
+                </div>
+              </div>
+
               <div className="pt-4 border-t border-stone-800 flex items-center justify-between">
                 <span className="text-xs text-stone-400">End your current session safely</span>
                 <button
@@ -1681,221 +1774,319 @@ export default function Dashboard() {
       {modal && (
         <div
           id="funds-modal"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-forest-950/70 backdrop-blur-sm animate-fade"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="funds-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-forest-950/80 backdrop-blur-sm animate-fade overflow-y-auto"
           onClick={() => setModal(null)}
         >
           <div
-            className="w-full max-w-md rounded-3xl bg-forest-900 p-6 sm:p-7 shadow-2xl border border-stone-800 animate-fade-up"
+            className="w-full max-w-md rounded-3xl bg-forest-900 shadow-2xl border border-stone-800 animate-fade-up my-auto flex flex-col max-h-[92vh] sm:max-h-[88vh] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-4">
+            {/* Header: Always visible at top */}
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-stone-800/80 bg-forest-900 shrink-0">
               <div className="flex items-center gap-2">
                 <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-forest-800 text-gold-400">
                   {modal === 'deposit' ? <Plus className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
                 </span>
-                <h3 className="font-display text-xl font-bold text-white capitalize">
+                <h3 id="funds-modal-title" className="font-display text-lg sm:text-xl font-bold text-white capitalize">
                   {modal === 'deposit' ? 'Deposit Funds' : 'Request Withdrawal'}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setModal(null)}
-                className="rounded-full p-1 text-stone-400 hover:text-white"
+                className="rounded-full p-1.5 text-stone-400 hover:text-white hover:bg-forest-800 transition-colors"
+                aria-label="Close modal"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <p className="text-xs text-stone-300 leading-relaxed mb-4">
-              {modal === 'deposit'
-                ? `Initiate a secure deposit via Uganda Mobile Money. Minimum deposit: ${formatUGX(
-                    platformSettings?.min_deposit ?? 10000
-                  )}. After submitting, approve the prompt on your handset.`
-                : `Enter the amount to withdraw to your registered MTN or Airtel Mobile Money wallet. Minimum withdrawal: ${formatUGX(
-                    platformSettings?.min_withdrawal ?? 10000
-                  )}. Available balance: ${formatUGX(withdrawableBalance)}.`}
-            </p>
-
-            {modal === 'withdraw' && (
-              <div
-                className="rounded-2xl border border-stone-800 bg-forest-950/40 p-4 mb-4 text-xs space-y-1.5 text-white"
-              >
-                <div className="flex items-center justify-between font-bold">
-                  <div className="flex items-center gap-2">
-                    <ArrowDownLeft className="h-4 w-4 shrink-0 text-forest-500" />
-                    <span>Withdrawal Status</span>
-                  </div>
-                  <span
-                    className="rounded-full bg-emerald-950/40 text-emerald-300 px-2.5 py-0.5 text-[10px] font-bold border border-emerald-800/50"
-                  >
-                    Available
-                  </span>
-                </div>
-
-                <p className="text-[11px] text-stone-400">Withdrawals are available subject to your wallet balance.</p>
-
-                <div className="pt-1.5 flex items-center justify-between text-[11px] font-semibold border-t border-stone-800/60">
-                  <span className="text-stone-400">Minimum withdrawal:</span>
-                  <span className="font-mono text-gold-400 font-bold">
-                    {formatUGX(platformSettings?.min_withdrawal ?? 10000)}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            <form onSubmit={submitWalletOp} className="space-y-4">
-              {/* Provider Selection */}
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-stone-400 block mb-1.5">
-                  Select Mobile Money Provider
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentProvider('mtn')}
-                    className={`flex items-center justify-center gap-2 rounded-xl p-2.5 border text-xs font-bold transition-all ${
-                      paymentProvider === 'mtn'
-                        ? 'border-amber-400 bg-amber-950/40 text-amber-300 shadow-xs ring-1 ring-amber-400'
-                        : 'border-stone-700 bg-forest-900 text-stone-300 hover:bg-stone-800'
-                    }`}
-                  >
-                    <span className="h-3 w-3 rounded-full bg-amber-400 border border-amber-500 shrink-0" />
-                    <span>MTN MoMo</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPaymentProvider('airtel')}
-                    className={`flex items-center justify-center gap-2 rounded-xl p-2.5 border text-xs font-bold transition-all ${
-                      paymentProvider === 'airtel'
-                        ? 'border-red-400 bg-red-950/40 text-red-300 shadow-xs ring-1 ring-red-400'
-                        : 'border-stone-700 bg-forest-900 text-stone-300 hover:bg-stone-800'
-                    }`}
-                  >
-                    <span className="h-3 w-3 rounded-full bg-red-500 border border-red-600 shrink-0" />
-                    <span>Airtel Money</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Phone contact */}
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-stone-400 block mb-1.5">
-                  Registered Mobile Money Number
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-500">
-                    <Smartphone className="h-4 w-4" />
-                  </span>
-                  <input
-                    type="tel"
-                    required
-                    placeholder="e.g. +256 772 123456"
-                    value={phoneContact}
-                    onChange={(e) => setPhoneContact(e.target.value)}
-                    className="w-full rounded-xl border border-stone-700 bg-forest-900 py-2.5 pl-10 pr-4 text-xs font-medium text-white focus:border-forest-600 focus:outline-none focus:ring-2 focus:ring-forest-600/20"
-                  />
-                </div>
-                <p className="mt-1 text-[11px] text-stone-400">
-                  This phone number is added to your transaction record so the admin can verify your deposit.
+            {/* Form wrapping scrollable content and fixed bottom actions */}
+            <form onSubmit={submitWalletOp} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              {/* Scrollable Content Body */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 overscroll-contain">
+                <p className="text-xs text-stone-300 leading-relaxed">
+                  {modal === 'deposit'
+                    ? `Please send your deposit money to the verified recipient number below. Minimum deposit: ${formatUGX(
+                        platformSettings?.min_deposit ?? 10000
+                      )}. After sending, submit your transaction details below to credit your account.`
+                    : `Enter the amount to withdraw to your registered MTN or Airtel Mobile Money wallet. Minimum withdrawal: ${formatUGX(
+                        platformSettings?.min_withdrawal ?? 10000
+                      )}. Available balance: ${formatUGX(withdrawableBalance)}.`}
                 </p>
-              </div>
 
-              {modal === 'deposit' && (
+                {modal === 'deposit' && (
+                  <div className="rounded-2xl border border-gold-500/40 bg-forest-950/90 p-4 space-y-3 shadow-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Smartphone className="h-4 w-4 text-gold-400" />
+                        <span className="text-xs font-bold text-white uppercase tracking-wider">
+                          Direct Deposit Details
+                        </span>
+                      </div>
+                      <span className="rounded-full bg-forest-800 text-gold-300 px-2.5 py-0.5 text-[10px] font-bold border border-gold-500/30">
+                        MTN & Airtel
+                      </span>
+                    </div>
+
+                    <div className="rounded-xl bg-forest-900/90 border border-stone-800 p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-stone-400 block">
+                            Deposit Recipient Number
+                          </span>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="font-mono text-lg font-black text-white tracking-wider">
+                              0763445008
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText('0763445008')
+                                setCopiedDepositPhone(true)
+                                setTimeout(() => setCopiedDepositPhone(false), 2500)
+                              }}
+                              className="inline-flex items-center gap-1 rounded-md bg-forest-800 hover:bg-forest-700 px-2 py-0.5 text-[11px] font-semibold text-stone-200 transition-colors border border-stone-700"
+                            >
+                              <Copy className="h-3 w-3" />
+                              <span>{copiedDepositPhone ? 'Copied!' : 'Copy'}</span>
+                            </button>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] uppercase font-bold text-stone-400 block">
+                            Recipient Name
+                          </span>
+                          <span className="text-xs font-bold text-gold-400 font-mono block mt-0.5">
+                            huzairu ssali
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-stone-800/80 flex items-center justify-between text-[11px]">
+                        <span className="flex items-center gap-1 text-emerald-400 font-semibold">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Verify Name: huzairu ssali
+                        </span>
+                        <a
+                          href="https://wa.me/256763445008?text=Hello%20Huzairu,%20I%20am%20making%20a%20deposit%20on%20Feldwert%20Capital"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-bold"
+                        >
+                          <MessageCircle className="h-3.5 w-3.5" />
+                          WhatsApp Helpline
+                        </a>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl bg-forest-900/40 p-2.5 text-[11px] text-stone-300 space-y-1 border border-stone-800/60">
+                      <p className="font-bold text-stone-200">Deposit Instructions:</p>
+                      <ol className="list-decimal list-inside space-y-0.5 text-stone-400">
+                        <li>Send your deposit money to <strong className="text-white">0763445008</strong> (recipient: <strong className="text-gold-300">huzairu ssali</strong>).</li>
+                        <li>Enter the amount and your sender phone number below.</li>
+                        <li>Click <strong className="text-white">Confirm Deposit</strong> to notify the admin for verification.</li>
+                      </ol>
+                    </div>
+                  </div>
+                )}
+
+                {modal === 'withdraw' && (
+                  <div
+                    className="rounded-2xl border border-stone-800 bg-forest-950/40 p-4 text-xs space-y-1.5 text-white"
+                  >
+                    <div className="flex items-center justify-between font-bold">
+                      <div className="flex items-center gap-2">
+                        <ArrowDownLeft className="h-4 w-4 shrink-0 text-forest-500" />
+                        <span>Withdrawal Status</span>
+                      </div>
+                      <span
+                        className="rounded-full bg-emerald-950/40 text-emerald-300 px-2.5 py-0.5 text-[10px] font-bold border border-emerald-800/50"
+                      >
+                        Available
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-stone-400">Withdrawals are available subject to your wallet balance.</p>
+
+                    <div className="pt-1.5 flex items-center justify-between text-[11px] font-semibold border-t border-stone-800/60">
+                      <span className="text-stone-400">Minimum withdrawal:</span>
+                      <span className="font-mono text-gold-400 font-bold">
+                        {formatUGX(platformSettings?.min_withdrawal ?? 10000)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Provider Selection */}
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wider text-stone-400 block mb-1.5">
-                    Mobile Money Transaction ID / Carrier Ref (Optional)
+                    Select Mobile Money Provider
                   </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 19827364501 or leave blank to auto-generate"
-                    value={depositTxRef}
-                    onChange={(e) => setDepositTxRef(e.target.value)}
-                    className="w-full rounded-xl border border-stone-700 bg-forest-900 py-2.5 px-3.5 text-xs font-medium text-white focus:border-forest-600 focus:outline-none focus:ring-2 focus:ring-forest-600/20"
-                  />
-                </div>
-              )}
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-stone-400">
-                    Amount (UGX)
-                  </label>
-                  {modal === 'withdraw' && (
-                    <span className="text-[11px] text-stone-400">
-                      Max: {formatUGX(withdrawableBalance)}
-                    </span>
-                  )}
-                </div>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-gold-400">
-                    UGX
-                  </span>
-                  <input
-                    id="input-funds-amount"
-                    type="number"
-                    autoFocus
-                    min={modal === 'withdraw' ? (platformSettings?.min_withdrawal ?? 10000) : 10000}
-                    max={modal === 'withdraw' ? withdrawableBalance : 100000000}
-                    step={1000}
-                    placeholder={`e.g. ${modal === 'withdraw' ? (platformSettings?.min_withdrawal ?? 10000) : 500000}`}
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    className="w-full rounded-xl border border-stone-700 bg-forest-900 py-3 pl-14 pr-4 font-display text-lg font-bold text-white focus:border-forest-600 focus:outline-none focus:ring-2 focus:ring-forest-600/20 disabled:bg-stone-800 disabled:text-stone-400"
-                  />
-                </div>
-              </div>
-
-              {/* Quick Amount Pills */}
-              <div className="flex flex-wrap gap-1.5">
-                {(modal === 'withdraw'
-                  ? Array.from(new Set([platformSettings?.min_withdrawal ?? 10000, 50000, 100000, 250000, 500000, 1000000]))
-                  : [50000, 100000, 250000, 500000, 1000000, 2500000]
-                ).map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    disabled={modal === 'withdraw' && preset > withdrawableBalance}
-                    onClick={() => setAmount(String(preset))}
-                    className="rounded-lg border border-stone-700 bg-forest-900 px-2.5 py-1 text-[11px] font-semibold text-stone-200 hover:bg-stone-800 disabled:opacity-40 disabled:pointer-events-none"
-                  >
-                    {formatUGX(preset)}
-                  </button>
-                ))}
-              </div>
-
-              {modal === 'deposit' && (
-                <div className="rounded-xl bg-forest-950/40 border border-stone-800 p-3 text-[11px] text-stone-300 space-y-1">
-                  <div className="flex justify-between font-semibold text-white">
-                    <span>Merchant Pay Code:</span>
-                    <span className="font-mono font-bold">
-                      {paymentProvider === 'mtn' ? '984210 (MTN)' : '771920 (Airtel)'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-stone-400">
-                    <span>Payment Reference:</span>
-                    <span className="font-mono font-bold text-gold-400">{profile?.username}-DEP</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentProvider('mtn')}
+                      className={`flex items-center justify-center gap-2 rounded-xl p-2.5 border text-xs font-bold transition-all ${
+                        paymentProvider === 'mtn'
+                          ? 'border-amber-400 bg-amber-950/40 text-amber-300 shadow-xs ring-1 ring-amber-400'
+                          : 'border-stone-700 bg-forest-900 text-stone-300 hover:bg-stone-800'
+                      }`}
+                    >
+                      <span className="h-3 w-3 rounded-full bg-amber-400 border border-amber-500 shrink-0" />
+                      <span>MTN MoMo</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentProvider('airtel')}
+                      className={`flex items-center justify-center gap-2 rounded-xl p-2.5 border text-xs font-bold transition-all ${
+                        paymentProvider === 'airtel'
+                          ? 'border-red-400 bg-red-950/40 text-red-300 shadow-xs ring-1 ring-red-400'
+                          : 'border-stone-700 bg-forest-900 text-stone-300 hover:bg-stone-800'
+                      }`}
+                    >
+                      <span className="h-3 w-3 rounded-full bg-red-500 border border-red-600 shrink-0" />
+                      <span>Airtel Money</span>
+                    </button>
                   </div>
                 </div>
-              )}
 
-              {err && (
-                <div className="rounded-xl bg-red-950/40 border border-red-800/50 p-3 text-xs font-semibold text-red-300">
-                  {err}
+                {/* Phone contact */}
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-stone-400 block mb-1.5">
+                    {modal === 'deposit' ? 'Your Sending Mobile Money Number' : 'Registered Mobile Money Number'}
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-500">
+                      <Smartphone className="h-4 w-4" />
+                    </span>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="e.g. +256 772 123456"
+                      value={phoneContact}
+                      onChange={(e) => setPhoneContact(e.target.value)}
+                      className="w-full rounded-xl border border-stone-700 bg-forest-900 py-2.5 pl-10 pr-4 text-xs font-medium text-white focus:border-forest-600 focus:outline-none focus:ring-2 focus:ring-forest-600/20"
+                    />
+                  </div>
+                  <p className="mt-1 text-[11px] text-stone-400">
+                    {modal === 'deposit'
+                      ? 'The phone number you used to send funds to 0763445008 (huzairu ssali).'
+                      : 'This phone number is added to your transaction record so the admin can verify your withdrawal.'}
+                  </p>
                 </div>
-              )}
 
-              {msg && (
-                <div className="rounded-xl bg-emerald-950/40 border border-emerald-800/50 p-3 text-xs font-semibold text-emerald-300 flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                  <span>{msg}</span>
+                {modal === 'deposit' && (
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-stone-400 block mb-1.5">
+                      Mobile Money Transaction ID / Carrier Ref (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 19827364501 or leave blank to auto-generate"
+                      value={depositTxRef}
+                      onChange={(e) => setDepositTxRef(e.target.value)}
+                      className="w-full rounded-xl border border-stone-700 bg-forest-900 py-2.5 px-3.5 text-xs font-medium text-white focus:border-forest-600 focus:outline-none focus:ring-2 focus:ring-forest-600/20"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-stone-400">
+                      Amount (UGX)
+                    </label>
+                    {modal === 'withdraw' && (
+                      <span className="text-[11px] text-stone-400">
+                        Max: {formatUGX(withdrawableBalance)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-gold-400">
+                      UGX
+                    </span>
+                    <input
+                      id="input-funds-amount"
+                      type="number"
+                      autoFocus
+                      min={modal === 'withdraw' ? (platformSettings?.min_withdrawal ?? 10000) : 10000}
+                      max={modal === 'withdraw' ? withdrawableBalance : 100000000}
+                      step={1000}
+                      placeholder={`e.g. ${modal === 'withdraw' ? (platformSettings?.min_withdrawal ?? 10000) : 500000}`}
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      className="w-full rounded-xl border border-stone-700 bg-forest-900 py-3 pl-14 pr-4 font-display text-lg font-bold text-white focus:border-forest-600 focus:outline-none focus:ring-2 focus:ring-forest-600/20 disabled:bg-stone-800 disabled:text-stone-400"
+                    />
+                  </div>
                 </div>
-              )}
 
-              <div className="flex items-center gap-2 pt-2">
+                {/* Quick Amount Pills */}
+                <div className="flex flex-wrap gap-1.5">
+                  {(modal === 'withdraw'
+                    ? Array.from(new Set([platformSettings?.min_withdrawal ?? 10000, 50000, 100000, 250000, 500000, 1000000]))
+                    : [50000, 100000, 250000, 500000, 1000000, 2500000]
+                  ).map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      disabled={modal === 'withdraw' && preset > withdrawableBalance}
+                      onClick={() => setAmount(String(preset))}
+                      className="rounded-lg border border-stone-700 bg-forest-900 px-2.5 py-1 text-[11px] font-semibold text-stone-200 hover:bg-stone-800 disabled:opacity-40 disabled:pointer-events-none"
+                    >
+                      {formatUGX(preset)}
+                    </button>
+                  ))}
+                </div>
+
+                {modal === 'deposit' && (
+                  <div className="rounded-xl bg-forest-950/60 border border-stone-800 p-3 text-[11px] text-stone-300 space-y-2">
+                    <div className="flex justify-between items-center font-semibold text-white">
+                      <span>Deposit Recipient:</span>
+                      <span className="font-mono font-bold text-gold-400">0763445008 (huzairu ssali)</span>
+                    </div>
+                    <div className="flex justify-between items-center text-stone-400">
+                      <span>Payment Reference:</span>
+                      <span className="font-mono font-bold text-stone-200">{profile?.username}-DEP</span>
+                    </div>
+                    <div className="pt-1.5 border-t border-stone-800 flex items-center justify-between text-[11px]">
+                      <span className="text-stone-400">Need help depositing?</span>
+                      <a
+                        href="https://wa.me/256763445008?text=Hello%20Huzairu,%20I%20have%20a%20question%20regarding%20my%20deposit."
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-bold"
+                      >
+                        <MessageCircle className="h-3 w-3" />
+                        WhatsApp: 0763445008
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {err && (
+                  <div className="rounded-xl bg-red-950/40 border border-red-800/50 p-3 text-xs font-semibold text-red-300">
+                    {err}
+                  </div>
+                )}
+
+                {msg && (
+                  <div className="rounded-xl bg-emerald-950/40 border border-emerald-800/50 p-3 text-xs font-semibold text-emerald-300 flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                    <span>{msg}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons: Sticky / Always Accessible Footer */}
+              <div className="p-4 sm:p-5 border-t border-stone-800/80 bg-forest-900/95 shrink-0 flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setModal(null)}
-                  className="flex-1 rounded-xl border border-stone-700 py-2.5 text-xs font-bold text-stone-300 hover:bg-stone-800"
+                  className="flex-1 rounded-xl border border-stone-700 py-2.5 text-xs font-bold text-stone-300 hover:bg-stone-800 transition-colors"
                 >
                   Cancel
                 </button>
@@ -1907,7 +2098,7 @@ export default function Dashboard() {
                     !amount ||
                     (modal === 'withdraw' && withdrawableBalance <= 0)
                   }
-                  className="flex-1 rounded-xl bg-forest-800 py-2.5 text-xs font-bold text-white hover:bg-forest-700 disabled:opacity-50"
+                  className="flex-1 rounded-xl bg-forest-700 py-2.5 text-xs font-bold text-white hover:bg-forest-600 disabled:opacity-50 transition-colors shadow-sm"
                 >
                   {busy
                     ? 'Processing...'
@@ -1922,11 +2113,11 @@ export default function Dashboard() {
       {/* ================= MODAL: TIMELINE POPUP ================= */}
       {selectedInvForTimeline && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-forest-950/70 backdrop-blur-sm animate-fade"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-forest-950/80 backdrop-blur-sm animate-fade overflow-y-auto"
           onClick={() => setSelectedInvForTimeline(null)}
         >
           <div
-            className="w-full max-w-2xl rounded-3xl bg-forest-900 p-6 sm:p-7 shadow-2xl border border-stone-800 animate-fade-up max-h-[90vh] overflow-y-auto"
+            className="w-full max-w-2xl rounded-3xl bg-forest-900 p-6 sm:p-7 shadow-2xl border border-stone-800 animate-fade-up max-h-[90vh] overflow-y-auto my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
@@ -1970,11 +2161,11 @@ export default function Dashboard() {
       {/* ================= MODAL: REFERRAL SHARE OPTIONS ================= */}
       {shareMenuOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-forest-950/70 backdrop-blur-sm animate-fade"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-forest-950/80 backdrop-blur-sm animate-fade overflow-y-auto"
           onClick={() => setShareMenuOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-3xl bg-forest-900 p-6 shadow-2xl border border-stone-800 animate-fade-up"
+            className="w-full max-w-md rounded-3xl bg-forest-900 p-6 shadow-2xl border border-stone-800 animate-fade-up max-h-[90vh] overflow-y-auto my-auto"
             role="dialog"
             aria-modal="true"
             aria-labelledby="share-referral-title"

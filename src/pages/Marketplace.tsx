@@ -233,7 +233,7 @@ export default function Marketplace() {
                 className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs sm:text-sm font-medium text-ink-700 focus:border-forest-600 focus:outline-none"
               >
                 <option value="roi">Highest ROI %</option>
-                <option value="duration">Shortest Duration</option>
+                <option value="duration">Shortest Period (Days)</option>
                 <option value="min_amount">Lowest Min. Amount</option>
               </select>
             </div>

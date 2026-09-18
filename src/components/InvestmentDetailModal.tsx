@@ -4,6 +4,7 @@ import {
   Calendar,
   CheckCircle2,
   ChevronRight,
+  Clock,
   Coins,
   DollarSign,
   Info,
@@ -49,8 +50,9 @@ export default function InvestmentDetailModal({
 
   // Progressive investment-based daily return calculation
   const durationMonths = project.duration_months || 12
+  const durationDays = durationMonths * 30
   const calcDailyReturn = calculateInvestmentDailyReturn(investAmount)
-  const calcTotalReturn = Math.round(calcDailyReturn * durationMonths * 30 * 100) / 100
+  const calcTotalReturn = Math.round(calcDailyReturn * durationDays * 100) / 100
   const calcTotalPayout = investAmount + calcTotalReturn
   const returnPct = investAmount > 0 ? Math.round((calcTotalReturn / investAmount) * 100 * 100) / 100 : 0
   const calcMonthlyReturn = Math.round(calcDailyReturn * 30 * 100) / 100
@@ -151,6 +153,10 @@ export default function InvestmentDetailModal({
                 <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1 text-xs font-medium text-stone-100 backdrop-blur-md">
                   <MapPin className="h-3 w-3 text-gold-400" />
                   {project.location}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-forest-900/80 px-2.5 py-1 text-xs font-semibold text-gold-300 border border-gold-500/30 backdrop-blur-md">
+                  <Clock className="h-3 w-3 text-gold-400" />
+                  <span>{durationDays} Days Term</span>
                 </span>
                 <span className="inline-flex items-center rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-2.5 py-0.5 text-xs font-semibold">
                   Status: {project.status}
@@ -275,11 +281,11 @@ export default function InvestmentDetailModal({
                 </div>
 
                 <div className="rounded-xl bg-forest-900 p-3 border border-stone-800">
-                  <span className="text-[10px] font-bold uppercase text-stone-400 block">Monthly Yield</span>
+                  <span className="text-[10px] font-bold uppercase text-stone-400 block">30-Day Yield</span>
                   <span className="font-display text-base font-bold text-white block mt-0.5">
                     +{formatUGX(calcMonthlyReturn)}
                   </span>
-                  <span className="text-[10px] text-stone-400 block">per 30-day cycle</span>
+                  <span className="text-[10px] text-stone-400 block">per 30-day block</span>
                 </div>
 
                 <div className="rounded-xl bg-forest-900 p-3 border border-stone-800">

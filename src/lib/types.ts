@@ -117,6 +117,9 @@ export interface PlatformSettings {
   currency: string
   referral_bonus_pct: number
   brand_name: string
+  deposit_phone?: string
+  deposit_recipient_name?: string
+  whatsapp_helpline?: string
 }
 
 export interface VideoItem {
