@@ -59,7 +59,7 @@ const initialFarmForm = {
   min_amount: 50000,
   max_amount: 50000000,
   expected_return_pct: 14.5,
-  duration_months: 12,
+  duration_days: 360,
   daily_return: 20.14,
   target_amount: 150000000,
 }
@@ -92,7 +92,7 @@ export default function Admin() {
     min_amount: number | string
     max_amount: number | string
     expected_return_pct: number | string
-    duration_months: number | string
+    duration_days: number | string
     daily_return: number | string
     total_expected_income: number | string
     target_amount: number | string
@@ -401,8 +401,11 @@ export default function Admin() {
         '-' +
         Date.now().toString(36)
 
-      const durationNum = Number(farmForm.duration_months) > 0 ? Number(farmForm.duration_months) : 1
-      const durationDays = Math.max(1, Math.round(durationNum * 30))
+      const durationDays = Number(farmForm.duration_days)
+      if (!Number.isInteger(durationDays) || durationDays <= 0) {
+        setMsg({ type: 'error', text: 'Investment period must be a positive whole number of days.' })
+        return
+      }
       const dailyReturn =
         Number(farmForm.daily_return) ||
         Math.round(
@@ -420,7 +423,7 @@ export default function Admin() {
         min_amount: Number(farmForm.min_amount),
         max_amount: farmForm.max_amount ? Number(farmForm.max_amount) : null,
         expected_return_pct: Number(farmForm.expected_return_pct),
-        duration_months: durationNum,
+        duration_months: durationDays / 30,
         daily_return: dailyReturn,
         target_amount: Number(farmForm.target_amount),
         funded_amount: 0,
@@ -453,8 +456,8 @@ export default function Admin() {
 
   const openFarmEditor = (f: FarmProject) => {
     const refMin = Number(f.min_amount) || 10000
-    const duration = Number(f.duration_months) > 0 ? Number(f.duration_months) : 12
-    const durationDays = Math.max(1, Math.round(duration * 30))
+    const durationMonths = Number(f.duration_months) > 0 ? Number(f.duration_months) : 12
+    const durationDays = Math.max(1, Math.round(durationMonths * 30))
     const roiPct = Number(f.expected_return_pct) || 14
     const dailyRet =
       f.daily_return != null
@@ -472,7 +475,7 @@ export default function Admin() {
       min_amount: refMin,
       max_amount: f.max_amount ?? '',
       expected_return_pct: roiPct,
-      duration_months: duration,
+      duration_days: durationDays,
       daily_return: dailyRet,
       total_expected_income: totalExp,
       target_amount: Number(f.target_amount) || 10000000,
@@ -482,16 +485,14 @@ export default function Admin() {
 
   const handleDurationChange = (newDurationStr: string) => {
     if (!farmEditDraft) return
-    const durNum = parseFloat(newDurationStr)
-    const validDur = !isNaN(durNum) && durNum > 0 ? durNum : 0
-    const days = Math.max(1, Math.round(validDur * 30))
+    const days = Number(newDurationStr)
     const daily = Number(farmEditDraft.daily_return) || 0
     const minAmt = Number(farmEditDraft.min_amount) || 1
     const total = Math.round(daily * days * 100) / 100
     const roi = minAmt > 0 ? Math.round(((total / minAmt) * 100) * 100) / 100 : 0
     setFarmEditDraft({
       ...farmEditDraft,
-      duration_months: newDurationStr,
+      duration_days: newDurationStr,
       total_expected_income: total,
       expected_return_pct: roi,
     })
@@ -500,9 +501,7 @@ export default function Admin() {
   const handleRecalculateYields = () => {
     if (!farmEditDraft) return
     const minAmt = Number(farmEditDraft.min_amount) || 1
-    const dur = Number(farmEditDraft.duration_months)
-    const duration = Number.isFinite(dur) && dur > 0 ? dur : 0.1
-    const days = Math.max(1, Math.round(duration * 30))
+    const days = Number(farmEditDraft.duration_days)
     const roi = Number(farmEditDraft.expected_return_pct) || 0
     const daily = Math.round(((minAmt * roi) / (100 * days)) * 100) / 100
     const total = Math.round(daily * days * 100) / 100
@@ -515,9 +514,7 @@ export default function Admin() {
 
   const handleDailyReturnChange = (newDaily: number) => {
     if (!farmEditDraft) return
-    const dur = Number(farmEditDraft.duration_months)
-    const duration = Number.isFinite(dur) && dur > 0 ? dur : 0.1
-    const days = Math.max(1, Math.round(duration * 30))
+    const days = Number(farmEditDraft.duration_days)
     const minAmt = Number(farmEditDraft.min_amount) || 1
     const total = Math.round(newDaily * days * 100) / 100
     const roi = minAmt > 0 ? Math.round(((total / minAmt) * 100) * 100) / 100 : 0
@@ -531,9 +528,7 @@ export default function Admin() {
 
   const handleTotalIncomeChange = (newTotal: number) => {
     if (!farmEditDraft) return
-    const dur = Number(farmEditDraft.duration_months)
-    const duration = Number.isFinite(dur) && dur > 0 ? dur : 0.1
-    const days = Math.max(1, Math.round(duration * 30))
+    const days = Number(farmEditDraft.duration_days)
     const minAmt = Number(farmEditDraft.min_amount) || 1
     const daily = Math.round((newTotal / days) * 100) / 100
     const roi = minAmt > 0 ? Math.round(((newTotal / minAmt) * 100) * 100) / 100 : 0
@@ -555,9 +550,9 @@ export default function Admin() {
       setMsg({ type: 'error', text: 'Minimum investment must be positive.' })
       return
     }
-    const durationNum = Number(farmEditDraft.duration_months)
-    if (!Number.isFinite(durationNum) || durationNum <= 0) {
-      setMsg({ type: 'error', text: 'Investment period must be greater than 0 (e.g. 0.3 for 9 days, 0.5 for 15 days).' })
+    const durationDays = Number(farmEditDraft.duration_days)
+    if (!Number.isInteger(durationDays) || durationDays <= 0) {
+      setMsg({ type: 'error', text: 'Investment period must be a positive whole number of days.' })
       return
     }
     if (Number(farmEditDraft.daily_return) < 0) {
@@ -579,7 +574,7 @@ export default function Admin() {
             ? Number(farmEditDraft.max_amount)
             : null,
         expected_return_pct: Number(farmEditDraft.expected_return_pct),
-        duration_months: durationNum,
+        duration_months: durationDays / 30,
         daily_return: Number(farmEditDraft.daily_return),
         target_amount: Number(farmEditDraft.target_amount),
         status: farmEditDraft.status,
@@ -1174,15 +1169,15 @@ export default function Admin() {
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">
-                      Term Duration ({Math.max(1, Math.round((Number(farmForm.duration_months) || 1) * 30))} Days)
+                      Investment Period (Days)
                     </label>
                     <input
                       type="number"
-                      step="any"
-                      min="0.01"
-                      value={farmForm.duration_months}
+                      step="1"
+                      min="1"
+                      value={farmForm.duration_days}
                       onChange={(e) =>
-                        setFarmForm({ ...farmForm, duration_months: Number(e.target.value) })
+                        setFarmForm({ ...farmForm, duration_days: Number(e.target.value) })
                       }
                       className="w-full rounded-xl border border-white/15 bg-black/30 px-3.5 py-2 text-xs text-white focus:border-gold-500 focus:outline-none"
                     />
@@ -1549,8 +1544,7 @@ export default function Admin() {
         )}
 
         {editingFarm && farmEditDraft && (() => {
-          const draftDur = parseFloat(String(farmEditDraft.duration_months))
-          const draftDays = !isNaN(draftDur) && draftDur > 0 ? Math.max(1, Math.round(draftDur * 30)) : 0
+          const draftDays = Number(farmEditDraft.duration_days)
 
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111713]/85 backdrop-blur-sm p-4 overflow-y-auto">
@@ -1802,19 +1796,19 @@ export default function Admin() {
 
                       <div>
                         <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-stone-400">
-                          Period ({draftDays} Days / {farmEditDraft.duration_months} mo)
+                          Investment Period (Days)
                         </label>
                         <input
                           type="number"
-                          step="any"
-                          min="0.01"
-                          value={farmEditDraft.duration_months}
+                          step="1"
+                          min="1"
+                          value={farmEditDraft.duration_days}
                           onChange={(e) => handleDurationChange(e.target.value)}
-                          placeholder="e.g. 0.1, 0.3, 0.5"
+                          placeholder="e.g. 1, 10, 30, 60"
                           className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-gold-500 font-bold"
                         />
                         <span className="text-[10px] text-stone-400 mt-1 block">
-                          Use decimals (e.g. 0.1=3d, 0.3=9d, 0.5=15d)
+                          Enter any positive whole number of days.
                         </span>
                       </div>
 
@@ -1837,26 +1831,26 @@ export default function Admin() {
                       </div>
                     </div>
 
-                    {/* Quick Decimal Presets for Short & Standard Terms */}
+                    {/* Quick presets for common investment periods */}
                     <div className="pt-2 border-t border-white/10">
                       <span className="text-[10px] font-medium text-stone-400 block mb-1.5">
-                        Quick Investment Periods (Days / Decimal Months):
+                        Quick Investment Periods (Days):
                       </span>
                       <div className="flex flex-wrap gap-1.5">
                         {[
-                          { label: '3 Days', val: '0.1' },
-                          { label: '5 Days', val: '0.17' },
-                          { label: '9 Days', val: '0.3' },
-                          { label: '10 Days', val: '0.33' },
-                          { label: '12 Days', val: '0.4' },
-                          { label: '15 Days', val: '0.5' },
-                          { label: '30 Days', val: '1' },
-                          { label: '60 Days', val: '2' },
-                          { label: '90 Days', val: '3' },
-                          { label: '180 Days', val: '6' },
-                          { label: '365 Days', val: '12' },
+                          { label: '3 Days', val: '3' },
+                          { label: '5 Days', val: '5' },
+                          { label: '9 Days', val: '9' },
+                          { label: '10 Days', val: '10' },
+                          { label: '12 Days', val: '12' },
+                          { label: '15 Days', val: '15' },
+                          { label: '30 Days', val: '30' },
+                          { label: '60 Days', val: '60' },
+                          { label: '90 Days', val: '90' },
+                          { label: '180 Days', val: '180' },
+                          { label: '365 Days', val: '365' },
                         ].map((p) => {
-                          const isSelected = String(farmEditDraft.duration_months) === p.val
+                          const isSelected = String(farmEditDraft.duration_days) === p.val
                           return (
                             <button
                               key={p.val}
@@ -1868,7 +1862,7 @@ export default function Admin() {
                                   : 'border border-white/10 bg-white/5 text-stone-300 hover:bg-white/10 hover:text-white'
                               }`}
                             >
-                              {p.label} <span className="opacity-70 font-normal">({p.val} mo)</span>
+                              {p.label}
                             </button>
                           )
                         })}
