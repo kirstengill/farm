@@ -63,13 +63,10 @@ export default function InvestmentCard({
       ? Math.min(100, Math.round((project.funded_amount / project.target_amount) * 100))
       : 0
 
-  // Use the product's configured daily return at the minimum investment.
+  // Use the shared percentage-based calculation at the minimum investment.
   const refAmount = project.min_amount || 15000
   const durationMonths = project.duration_months || 1
-  const dailyReturnRef =
-    project.daily_return && project.daily_return >= 1000
-      ? project.daily_return
-      : calculateInvestmentDailyReturn(refAmount)
+  const dailyReturnRef = calculateInvestmentDailyReturn(refAmount)
   const expectedTotalProfit = Math.round(dailyReturnRef * durationMonths * 30 * 100) / 100
   const dailyRatePct = ((dailyReturnRef / refAmount) * 100).toFixed(2)
 

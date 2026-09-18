@@ -48,7 +48,7 @@ export default function InvestmentDetailModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
-  // Progressive investment-based daily return calculation
+  // Shared percentage-based daily return calculation
   const durationMonths = Number(project.duration_months) > 0 ? Number(project.duration_months) : 12
   const durationDays = Math.max(1, Math.round(durationMonths * 30))
   const calcDailyReturn = calculateInvestmentDailyReturn(investAmount)

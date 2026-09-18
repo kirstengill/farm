@@ -508,12 +508,16 @@ function loadState(): DBState {
       modified = true
     }
 
-    // Migrate farm_projects to progressive investment-based daily returns
+    // Migrate farm_projects to percentage-based daily returns
     if (parsed.farm_projects) {
       for (const farm of parsed.farm_projects) {
         const expectedDaily = calculateInvestmentDailyReturn(farm.min_amount)
-        if (!farm.daily_return || farm.daily_return < 1000 || farm.daily_return !== expectedDaily) {
+        const expectedReturnPct = Math.round(
+          (expectedDaily * Number(farm.duration_months || 12) * 30 / farm.min_amount) * 100 * 100
+        ) / 100
+        if (farm.daily_return !== expectedDaily || farm.expected_return_pct !== expectedReturnPct) {
           farm.daily_return = expectedDaily
+          farm.expected_return_pct = expectedReturnPct
           modified = true
         }
       }
@@ -529,7 +533,7 @@ function loadState(): DBState {
       for (const inv of parsed.investments) {
         if (inv.status === 'active') {
           const properDaily = calculateInvestmentDailyReturn(inv.amount)
-          if (!inv.daily_return || inv.daily_return < 1000 || inv.daily_return !== properDaily) {
+          if (inv.daily_return !== properDaily) {
             inv.daily_return = properDaily
             modified = true
           }
@@ -1543,7 +1547,7 @@ export const mockSupabase = {
       }
 
       const invId = `inv-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
-      // Calculate progressive daily return based on invested amount
+      // Calculate the shared percentage-based daily return
       const dailyReturn = calculateInvestmentDailyReturn(p_amount)
       const durationMonths = Number(farm.duration_months) > 0 ? Number(farm.duration_months) : 12
       const durationDays = Math.max(1, Math.round(durationMonths * 30))

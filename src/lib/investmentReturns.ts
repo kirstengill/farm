@@ -1,33 +1,16 @@
 /**
  * Investment Daily Returns & Accrual Engine
  * 
- * Implements a progressive investment-amount-based daily return model:
- * - Investment of UGX 15,000 -> UGX 5,000/day (33.33% daily return)
- * - Investment of UGX 20,000 -> UGX 7,500/day (37.50% daily return)
- * - Progressive tiers for higher investments ensuring proportionally higher daily returns.
+ * Implements a percentage-based daily return model:
+ * - Investment of UGX 15,000 -> approximately UGX 1,850/day (12.33% daily return)
  * - Supports arbitrary amounts continuously.
  */
 
+export const INVESTMENT_DAILY_RETURN_RATE = 1850 / 15000
+
 export function calculateInvestmentDailyReturn(amount: number): number {
   if (!amount || amount <= 0) return 0
-  const a = Math.round(amount)
-
-  if (a < 15000) {
-    return Math.round(a / 3)
-  }
-  if (a <= 20000) {
-    return Math.round(5000 + (a - 15000) * 0.5)
-  }
-  if (a <= 50000) {
-    return Math.round(7500 + (a - 20000) * 0.4)
-  }
-  if (a <= 100000) {
-    return Math.round(19500 + (a - 50000) * 0.42)
-  }
-  if (a <= 500000) {
-    return Math.round(40500 + (a - 100000) * 0.44)
-  }
-  return Math.round(216500 + (a - 500000) * 0.46)
+  return Math.round(Math.round(amount) * INVESTMENT_DAILY_RETURN_RATE)
 }
 
 export interface InvestmentAccrualStatus {

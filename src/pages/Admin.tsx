@@ -46,6 +46,7 @@ import { farmArtFor, FARM_IMAGES } from '../lib/farmArt'
 import AdminPlatformSettings from '../components/AdminPlatformSettings'
 import AdminVideoManager from '../components/AdminVideoManager'
 import { getPlatformSettings } from '../lib/settings'
+import { calculateInvestmentDailyReturn } from '../lib/investmentReturns'
 
 type Tab = 'overview' | 'requests' | 'farms' | 'users' | 'transactions' | 'referrals' | 'videos' | 'settings'
 type UserRow = Profile & { wallet?: { balance: number; total_invested?: number } }
@@ -406,13 +407,12 @@ export default function Admin() {
         setMsg({ type: 'error', text: 'Investment period must be a positive whole number of days.' })
         return
       }
-      const dailyReturn =
-        Number(farmForm.daily_return) ||
-        Math.round(
-          ((Number(farmForm.min_amount) * Number(farmForm.expected_return_pct)) /
-            (100 * durationDays)) *
-            100
-        ) / 100
+      const minAmount = Number(farmForm.min_amount)
+      const dailyReturn = calculateInvestmentDailyReturn(minAmount)
+      const expectedReturnPct =
+        minAmount > 0
+          ? Math.round(((dailyReturn * durationDays) / minAmount) * 100 * 100) / 100
+          : 0
 
       const payload = {
         name: farmForm.name,
@@ -422,7 +422,7 @@ export default function Admin() {
         image_url: farmForm.image_url || farmArtFor(farmForm.category),
         min_amount: Number(farmForm.min_amount),
         max_amount: farmForm.max_amount ? Number(farmForm.max_amount) : null,
-        expected_return_pct: Number(farmForm.expected_return_pct),
+        expected_return_pct: expectedReturnPct,
         duration_months: durationDays / 30,
         daily_return: dailyReturn,
         target_amount: Number(farmForm.target_amount),
@@ -458,11 +458,8 @@ export default function Admin() {
     const refMin = Number(f.min_amount) || 10000
     const durationMonths = Number(f.duration_months) > 0 ? Number(f.duration_months) : 12
     const durationDays = Math.max(1, Math.round(durationMonths * 30))
-    const roiPct = Number(f.expected_return_pct) || 14
-    const dailyRet =
-      f.daily_return != null
-        ? Number(f.daily_return)
-        : Math.round(((refMin * roiPct) / (100 * durationDays)) * 100) / 100
+    const dailyRet = calculateInvestmentDailyReturn(refMin)
+    const roiPct = refMin > 0 ? Math.round(((dailyRet * durationDays) / refMin) * 100 * 100) / 100 : 0
     const totalExp = Math.round(dailyRet * durationDays * 100) / 100
 
     setEditingFarm(f)
@@ -486,8 +483,8 @@ export default function Admin() {
   const handleDurationChange = (newDurationStr: string) => {
     if (!farmEditDraft) return
     const days = Number(newDurationStr)
-    const daily = Number(farmEditDraft.daily_return) || 0
     const minAmt = Number(farmEditDraft.min_amount) || 1
+    const daily = calculateInvestmentDailyReturn(minAmt)
     const total = Math.round(daily * days * 100) / 100
     const roi = minAmt > 0 ? Math.round(((total / minAmt) * 100) * 100) / 100 : 0
     setFarmEditDraft({
@@ -502,8 +499,7 @@ export default function Admin() {
     if (!farmEditDraft) return
     const minAmt = Number(farmEditDraft.min_amount) || 1
     const days = Number(farmEditDraft.duration_days)
-    const roi = Number(farmEditDraft.expected_return_pct) || 0
-    const daily = Math.round(((minAmt * roi) / (100 * days)) * 100) / 100
+    const daily = calculateInvestmentDailyReturn(minAmt)
     const total = Math.round(daily * days * 100) / 100
     setFarmEditDraft({
       ...farmEditDraft,
@@ -575,7 +571,7 @@ export default function Admin() {
             : null,
         expected_return_pct: Number(farmEditDraft.expected_return_pct),
         duration_months: durationDays / 30,
-        daily_return: Number(farmEditDraft.daily_return),
+        daily_return: calculateInvestmentDailyReturn(Number(farmEditDraft.min_amount)),
         target_amount: Number(farmEditDraft.target_amount),
         status: farmEditDraft.status,
       }
@@ -1874,10 +1870,10 @@ export default function Admin() {
                   <div className="rounded-2xl border-2 border-emerald-500/30 bg-emerald-950/20 p-4 space-y-3">
                     <div>
                       <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 block">
-                        Custom Daily Return & Total Expected Income
+                        Percentage Daily Return & Total Expected Income
                       </span>
                       <p className="text-[11px] text-stone-400">
-                        Directly edit the daily return or total expected income for the minimum investment tier. Changes update investor accruals and marketplace calculations.
+                        Values are calculated from the minimum investment using the shared percentage-based return rule.
                       </p>
                     </div>
 
@@ -1891,7 +1887,7 @@ export default function Admin() {
                           step={0.01}
                           min={0}
                           value={farmEditDraft.daily_return}
-                          onChange={(e) => handleDailyReturnChange(Number(e.target.value))}
+                          readOnly
                           className="w-full rounded-xl border border-emerald-500/40 bg-black/50 px-3.5 py-2.5 text-base text-emerald-300 font-bold outline-none focus:border-emerald-400"
                         />
                         <span className="text-[10px] text-stone-400 mt-1 block">
@@ -1908,7 +1904,7 @@ export default function Admin() {
                           step={1}
                           min={0}
                           value={farmEditDraft.total_expected_income}
-                          onChange={(e) => handleTotalIncomeChange(Number(e.target.value))}
+                          readOnly
                           className="w-full rounded-xl border border-gold-500/40 bg-black/50 px-3.5 py-2.5 text-base text-gold-300 font-bold outline-none focus:border-gold-400"
                         />
                         <span className="text-[10px] text-stone-400 mt-1 block">
