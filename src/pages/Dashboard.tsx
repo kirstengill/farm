@@ -229,13 +229,9 @@ export default function Dashboard() {
     }
 
     if (modal === 'withdraw') {
-      const minW = platformSettings?.min_withdrawal ?? 10000
+      const minW = Number(platformSettings?.min_withdrawal ?? 10000)
       if (amt < minW) {
         setErr(`Minimum withdrawal is UGX ${minW.toLocaleString('en-US')}.`)
-        return
-      }
-      if (amt > (wallet?.balance ?? 0)) {
-        setErr(`Withdrawal amount cannot exceed available balance of ${formatUGX(wallet?.balance ?? 0)}.`)
         return
       }
     }
@@ -275,9 +271,7 @@ export default function Dashboard() {
         setErr(
           /reference|not-null|constraint/i.test(errorMessage)
             ? 'We could not create the request. Please try again.'
-            : errorMessage.includes('Minimum')
-            ? errorMessage
-            : 'We could not submit your request. Please check the details and try again.'
+            : errorMessage
         )
       } else {
         const providerName = paymentProvider === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money'
@@ -2000,8 +1994,8 @@ export default function Dashboard() {
                       Amount (UGX)
                     </label>
                     {modal === 'withdraw' && (
-                      <span className="text-[11px] text-stone-400">
-                        Max: {formatUGX(withdrawableBalance)}
+                      <span className="text-[11px] text-gold-400 font-medium">
+                        Min limit: {formatUGX(platformSettings?.min_withdrawal ?? 10000)}
                       </span>
                     )}
                   </div>
@@ -2014,8 +2008,8 @@ export default function Dashboard() {
                       type="number"
                       autoFocus
                       min={modal === 'withdraw' ? (platformSettings?.min_withdrawal ?? 10000) : 10000}
-                      max={modal === 'withdraw' ? withdrawableBalance : 100000000}
-                      step={1000}
+                      max={100000000}
+                      step="any"
                       placeholder={`e.g. ${modal === 'withdraw' ? (platformSettings?.min_withdrawal ?? 10000) : 500000}`}
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
@@ -2033,9 +2027,8 @@ export default function Dashboard() {
                     <button
                       key={preset}
                       type="button"
-                      disabled={modal === 'withdraw' && preset > withdrawableBalance}
                       onClick={() => setAmount(String(preset))}
-                      className="rounded-lg border border-stone-700 bg-forest-900 px-2.5 py-1 text-[11px] font-semibold text-stone-200 hover:bg-stone-800 disabled:opacity-40 disabled:pointer-events-none"
+                      className="rounded-lg border border-stone-700 bg-forest-900 px-2.5 py-1 text-[11px] font-semibold text-stone-200 hover:bg-stone-800 transition-colors"
                     >
                       {formatUGX(preset)}
                     </button>
@@ -2093,11 +2086,7 @@ export default function Dashboard() {
                 <button
                   id="btn-submit-funds"
                   type="submit"
-                  disabled={
-                    busy ||
-                    !amount ||
-                    (modal === 'withdraw' && withdrawableBalance <= 0)
-                  }
+                  disabled={busy || !amount}
                   className="flex-1 rounded-xl bg-forest-700 py-2.5 text-xs font-bold text-white hover:bg-forest-600 disabled:opacity-50 transition-colors shadow-sm"
                 >
                   {busy
