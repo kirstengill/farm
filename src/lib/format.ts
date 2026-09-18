@@ -36,12 +36,18 @@ export const formatRelativeDays = (iso: string | null | undefined) => {
 }
 
 export function durationToDays(durationMonths: number | null | undefined): number {
-  const m = Number(durationMonths) || 1
-  return m * 30
+  const m = Number(durationMonths)
+  if (!Number.isFinite(m) || m <= 0) return 30
+  return Math.max(1, Math.round(m * 30))
 }
 
 export function formatDurationDays(durationMonths: number | null | undefined): string {
-  return `${durationToDays(durationMonths)} Days`
+  const m = Number(durationMonths)
+  const days = durationToDays(durationMonths)
+  if (Number.isFinite(m) && m > 0 && m < 1) {
+    return `${days} Days (${m} mo)`
+  }
+  return `${days} Days`
 }
 
 export function calculateInvestmentSchedule(
@@ -49,23 +55,23 @@ export function calculateInvestmentSchedule(
   returnPct: number,
   durationMonths: number
 ) {
+  const m = Number(durationMonths) > 0 ? Number(durationMonths) : 1
+  const durationDays = durationToDays(m)
   const totalReturn = Math.round((amount * returnPct) / 100)
   const totalPayout = amount + totalReturn
-  const durationDays = durationToDays(durationMonths)
-  const monthlyReturn = durationMonths > 0 ? Math.round(totalReturn / durationMonths) : 0
-  const dailyReturn = durationMonths > 0 ? Math.round(totalReturn / (durationMonths * 30)) : 0
+  const monthlyReturn = m > 0 ? Math.round(totalReturn / m) : 0
+  const dailyReturn = durationDays > 0 ? Math.round(totalReturn / durationDays) : 0
   const dailyRatePct =
-    durationMonths > 0 ? (returnPct / (durationMonths * 30)).toFixed(3) : '0.000'
-  const monthlyRatePct = durationMonths > 0 ? (returnPct / durationMonths).toFixed(2) : '0.00'
+    durationDays > 0 ? (returnPct / durationDays).toFixed(3) : '0.000'
+  const monthlyRatePct = m > 0 ? (returnPct / m).toFixed(2) : '0.00'
 
   const startDate = new Date()
-  const completionDate = new Date()
-  completionDate.setMonth(completionDate.getMonth() + durationMonths)
+  const completionDate = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000)
 
   return {
     amount,
     returnPct,
-    durationMonths,
+    durationMonths: m,
     durationDays,
     totalReturn,
     totalPayout,

@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Eye,
   Filter,
+  Image as ImageIcon,
   Layers,
   LayoutDashboard,
   Loader2,
@@ -41,7 +42,7 @@ import { signOut } from '../lib/auth'
 import { formatUGX, formatDate } from '../lib/format'
 import type { Profile, FarmProject, Transaction, AppNotification, PlatformSettings, Referral } from '../lib/types'
 import FarmImage from '../components/FarmImage'
-import { farmArtFor } from '../lib/farmArt'
+import { farmArtFor, FARM_IMAGES } from '../lib/farmArt'
 import AdminPlatformSettings from '../components/AdminPlatformSettings'
 import AdminVideoManager from '../components/AdminVideoManager'
 import { getPlatformSettings } from '../lib/settings'
@@ -88,13 +89,13 @@ export default function Admin() {
     location: string
     description: string
     image_url: string
-    min_amount: number
-    max_amount: number | ''
-    expected_return_pct: number
-    duration_months: number
-    daily_return: number
-    total_expected_income: number
-    target_amount: number
+    min_amount: number | string
+    max_amount: number | string
+    expected_return_pct: number | string
+    duration_months: number | string
+    daily_return: number | string
+    total_expected_income: number | string
+    target_amount: number | string
     status: string
   } | null>(null)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -400,11 +401,13 @@ export default function Admin() {
         '-' +
         Date.now().toString(36)
 
+      const durationNum = Number(farmForm.duration_months) > 0 ? Number(farmForm.duration_months) : 1
+      const durationDays = Math.max(1, Math.round(durationNum * 30))
       const dailyReturn =
         Number(farmForm.daily_return) ||
         Math.round(
           ((Number(farmForm.min_amount) * Number(farmForm.expected_return_pct)) /
-            (100 * Number(farmForm.duration_months) * 30)) *
+            (100 * durationDays)) *
             100
         ) / 100
 
@@ -417,7 +420,7 @@ export default function Admin() {
         min_amount: Number(farmForm.min_amount),
         max_amount: farmForm.max_amount ? Number(farmForm.max_amount) : null,
         expected_return_pct: Number(farmForm.expected_return_pct),
-        duration_months: Number(farmForm.duration_months),
+        duration_months: durationNum,
         daily_return: dailyReturn,
         target_amount: Number(farmForm.target_amount),
         funded_amount: 0,
@@ -450,13 +453,14 @@ export default function Admin() {
 
   const openFarmEditor = (f: FarmProject) => {
     const refMin = Number(f.min_amount) || 10000
-    const duration = Number(f.duration_months) || 12
+    const duration = Number(f.duration_months) > 0 ? Number(f.duration_months) : 12
+    const durationDays = Math.max(1, Math.round(duration * 30))
     const roiPct = Number(f.expected_return_pct) || 14
     const dailyRet =
       f.daily_return != null
         ? Number(f.daily_return)
-        : Math.round(((refMin * roiPct) / (100 * duration * 30)) * 100) / 100
-    const totalExp = Math.round(dailyRet * duration * 30 * 100) / 100
+        : Math.round(((refMin * roiPct) / (100 * durationDays)) * 100) / 100
+    const totalExp = Math.round(dailyRet * durationDays * 100) / 100
 
     setEditingFarm(f)
     setFarmEditDraft({
@@ -476,13 +480,32 @@ export default function Admin() {
     })
   }
 
+  const handleDurationChange = (newDurationStr: string) => {
+    if (!farmEditDraft) return
+    const durNum = parseFloat(newDurationStr)
+    const validDur = !isNaN(durNum) && durNum > 0 ? durNum : 0
+    const days = Math.max(1, Math.round(validDur * 30))
+    const daily = Number(farmEditDraft.daily_return) || 0
+    const minAmt = Number(farmEditDraft.min_amount) || 1
+    const total = Math.round(daily * days * 100) / 100
+    const roi = minAmt > 0 ? Math.round(((total / minAmt) * 100) * 100) / 100 : 0
+    setFarmEditDraft({
+      ...farmEditDraft,
+      duration_months: newDurationStr,
+      total_expected_income: total,
+      expected_return_pct: roi,
+    })
+  }
+
   const handleRecalculateYields = () => {
     if (!farmEditDraft) return
     const minAmt = Number(farmEditDraft.min_amount) || 1
-    const duration = Number(farmEditDraft.duration_months) || 1
+    const dur = Number(farmEditDraft.duration_months)
+    const duration = Number.isFinite(dur) && dur > 0 ? dur : 0.1
+    const days = Math.max(1, Math.round(duration * 30))
     const roi = Number(farmEditDraft.expected_return_pct) || 0
-    const daily = Math.round(((minAmt * roi) / (100 * duration * 30)) * 100) / 100
-    const total = Math.round(daily * duration * 30 * 100) / 100
+    const daily = Math.round(((minAmt * roi) / (100 * days)) * 100) / 100
+    const total = Math.round(daily * days * 100) / 100
     setFarmEditDraft({
       ...farmEditDraft,
       daily_return: daily,
@@ -492,10 +515,12 @@ export default function Admin() {
 
   const handleDailyReturnChange = (newDaily: number) => {
     if (!farmEditDraft) return
-    const duration = Number(farmEditDraft.duration_months) || 1
+    const dur = Number(farmEditDraft.duration_months)
+    const duration = Number.isFinite(dur) && dur > 0 ? dur : 0.1
+    const days = Math.max(1, Math.round(duration * 30))
     const minAmt = Number(farmEditDraft.min_amount) || 1
-    const total = Math.round(newDaily * duration * 30 * 100) / 100
-    const roi = Math.round(((total / minAmt) * 100) * 100) / 100
+    const total = Math.round(newDaily * days * 100) / 100
+    const roi = minAmt > 0 ? Math.round(((total / minAmt) * 100) * 100) / 100 : 0
     setFarmEditDraft({
       ...farmEditDraft,
       daily_return: newDaily,
@@ -506,10 +531,12 @@ export default function Admin() {
 
   const handleTotalIncomeChange = (newTotal: number) => {
     if (!farmEditDraft) return
-    const duration = Number(farmEditDraft.duration_months) || 1
+    const dur = Number(farmEditDraft.duration_months)
+    const duration = Number.isFinite(dur) && dur > 0 ? dur : 0.1
+    const days = Math.max(1, Math.round(duration * 30))
     const minAmt = Number(farmEditDraft.min_amount) || 1
-    const daily = Math.round((newTotal / (duration * 30)) * 100) / 100
-    const roi = Math.round(((newTotal / minAmt) * 100) * 100) / 100
+    const daily = Math.round((newTotal / days) * 100) / 100
+    const roi = minAmt > 0 ? Math.round(((newTotal / minAmt) * 100) * 100) / 100 : 0
     setFarmEditDraft({
       ...farmEditDraft,
       daily_return: daily,
@@ -524,11 +551,16 @@ export default function Admin() {
       setMsg({ type: 'error', text: 'Project name is required.' })
       return
     }
-    if (farmEditDraft.min_amount <= 0) {
+    if (Number(farmEditDraft.min_amount) <= 0) {
       setMsg({ type: 'error', text: 'Minimum investment must be positive.' })
       return
     }
-    if (farmEditDraft.daily_return < 0) {
+    const durationNum = Number(farmEditDraft.duration_months)
+    if (!Number.isFinite(durationNum) || durationNum <= 0) {
+      setMsg({ type: 'error', text: 'Investment period must be greater than 0 (e.g. 0.3 for 9 days, 0.5 for 15 days).' })
+      return
+    }
+    if (Number(farmEditDraft.daily_return) < 0) {
       setMsg({ type: 'error', text: 'Daily return cannot be negative.' })
       return
     }
@@ -547,7 +579,7 @@ export default function Admin() {
             ? Number(farmEditDraft.max_amount)
             : null,
         expected_return_pct: Number(farmEditDraft.expected_return_pct),
-        duration_months: Number(farmEditDraft.duration_months),
+        duration_months: durationNum,
         daily_return: Number(farmEditDraft.daily_return),
         target_amount: Number(farmEditDraft.target_amount),
         status: farmEditDraft.status,
@@ -1142,10 +1174,12 @@ export default function Admin() {
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">
-                      Term Duration ({farmForm.duration_months * 30} Days)
+                      Term Duration ({Math.max(1, Math.round((Number(farmForm.duration_months) || 1) * 30))} Days)
                     </label>
                     <input
                       type="number"
+                      step="any"
+                      min="0.01"
                       value={farmForm.duration_months}
                       onChange={(e) =>
                         setFarmForm({ ...farmForm, duration_months: Number(e.target.value) })
@@ -1218,13 +1252,14 @@ export default function Admin() {
               <div className="space-y-3">
                 {farms.map((f) => {
                   const refMin = Number(f.min_amount) || 10000
-                  const duration = Number(f.duration_months) || 12
+                  const duration = Number(f.duration_months) > 0 ? Number(f.duration_months) : 12
+                  const durationDays = Math.max(1, Math.round(duration * 30))
                   const roiPct = Number(f.expected_return_pct) || 14
                   const dailyRet =
                     f.daily_return != null
                       ? Number(f.daily_return)
-                      : Math.round(((refMin * roiPct) / (100 * duration * 30)) * 100) / 100
-                  const totalExp = Math.round(dailyRet * duration * 30 * 100) / 100
+                      : Math.round(((refMin * roiPct) / (100 * durationDays)) * 100) / 100
+                  const totalExp = Math.round(dailyRet * durationDays * 100) / 100
 
                   return (
                     <div
@@ -1247,8 +1282,8 @@ export default function Admin() {
                             <span
                               className={`rounded-full px-2 py-0.2 text-[9px] font-bold ${
                                 f.status === 'active'
-                                  ? 'bg-emerald-500/20 text-emerald-300'
-                                  : 'bg-stone-500/20 text-stone-400'
+                                    ? 'bg-emerald-500/20 text-emerald-300'
+                                    : 'bg-stone-500/20 text-stone-400'
                               }`}
                             >
                               {f.status}
@@ -1266,7 +1301,7 @@ export default function Admin() {
                               +{formatUGX(totalExp)} total exp.
                             </span>
                             <span>·</span>
-                            <span>{roiPct}% p.a. ({duration * 30} days)</span>
+                            <span>{roiPct}% p.a. ({durationDays} days / {f.duration_months} mo)</span>
                           </div>
                         </div>
                       </div>
@@ -1513,283 +1548,459 @@ export default function Admin() {
           </div>
         )}
 
-        {editingFarm && farmEditDraft && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111713]/85 backdrop-blur-sm p-4 overflow-y-auto">
-            <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#141b18] p-6 shadow-2xl my-8 max-h-[90vh] flex flex-col">
-              <div className="mb-5 flex items-center justify-between gap-3 border-b border-white/10 pb-4 shrink-0">
-                <div>
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-gold-400 font-bold">
-                    Agri Project & Financial Yield Editor
-                  </p>
-                  <h3 className="font-display text-2xl font-bold text-white">
-                    Edit {farmEditDraft.name || 'Program'}
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingFarm(null)
-                    setFarmEditDraft(null)
-                  }}
-                  className="rounded-full border border-white/10 p-2 text-stone-300 hover:bg-white/5"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+        {editingFarm && farmEditDraft && (() => {
+          const draftDur = parseFloat(String(farmEditDraft.duration_months))
+          const draftDays = !isNaN(draftDur) && draftDur > 0 ? Math.max(1, Math.round(draftDur * 30)) : 0
 
-              <div className="space-y-4 overflow-y-auto pr-1 flex-1">
-                {/* Title & Sector Category */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111713]/85 backdrop-blur-sm p-4 overflow-y-auto">
+              <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#141b18] p-6 shadow-2xl my-8 max-h-[90vh] flex flex-col">
+                <div className="mb-5 flex items-center justify-between gap-3 border-b border-white/10 pb-4 shrink-0">
                   <div>
-                    <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
-                      Program Name
-                    </label>
-                    <input
-                      type="text"
-                      value={farmEditDraft.name}
-                      onChange={(e) => setFarmEditDraft({ ...farmEditDraft, name: e.target.value })}
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm text-white outline-none focus:border-gold-500"
-                    />
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-gold-400 font-bold">
+                      Agri Project & Financial Yield Editor
+                    </p>
+                    <h3 className="font-display text-2xl font-bold text-white">
+                      Edit {farmEditDraft.name || 'Program'}
+                    </h3>
                   </div>
-
-                  <div>
-                    <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
-                      Sector Category
-                    </label>
-                    <select
-                      value={farmEditDraft.category}
-                      onChange={(e) => setFarmEditDraft({ ...farmEditDraft, category: e.target.value })}
-                      className="w-full rounded-xl border border-white/10 bg-[#1a231d] px-3 py-2.5 text-sm text-white outline-none focus:border-gold-500"
-                    >
-                      <option value="Cattle Investment">🐄 Cattle Investment</option>
-                      <option value="Pig Farming">🐖 Pig Farming</option>
-                      <option value="Animal Feeds">🌾 Animal Feeds</option>
-                      <option value="Broilers">🐔 Broilers</option>
-                    </select>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingFarm(null)
+                      setFarmEditDraft(null)
+                    }}
+                    className="rounded-full border border-white/10 p-2 text-stone-300 hover:bg-white/5"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
 
-                {/* Location & Status */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
-                      Location / Region
-                    </label>
-                    <input
-                      type="text"
-                      value={farmEditDraft.location}
-                      onChange={(e) => setFarmEditDraft({ ...farmEditDraft, location: e.target.value })}
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm text-white outline-none focus:border-gold-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
-                      Status
-                    </label>
-                    <select
-                      value={farmEditDraft.status}
-                      onChange={(e) => setFarmEditDraft({ ...farmEditDraft, status: e.target.value })}
-                      className="w-full rounded-xl border border-white/10 bg-[#1a231d] px-3 py-2.5 text-sm text-white outline-none focus:border-gold-500"
-                    >
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
-                      <option value="funded">Funded</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Base Financial Parameters */}
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-gold-400">
-                      Core Program Parameters
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleRecalculateYields}
-                      className="text-xs text-gold-300 underline hover:text-gold-200"
-                    >
-                      Reset/Sync Yields from ROI %
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-4 overflow-y-auto pr-1 flex-1">
+                  {/* Title & Sector Category */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-stone-400">
-                        Min. Investment (UGX)
+                      <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
+                        Program Name
                       </label>
                       <input
-                        type="number"
-                        min={1000}
-                        step={5000}
-                        value={farmEditDraft.min_amount}
-                        onChange={(e) =>
-                          setFarmEditDraft({ ...farmEditDraft, min_amount: Number(e.target.value) })
-                        }
-                        className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-gold-500 font-bold"
+                        type="text"
+                        value={farmEditDraft.name}
+                        onChange={(e) => setFarmEditDraft({ ...farmEditDraft, name: e.target.value })}
+                        className="w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm text-white outline-none focus:border-gold-500"
                       />
                     </div>
 
                     <div>
-                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-stone-400">
-                        Duration ({farmEditDraft.duration_months * 30} Days / {farmEditDraft.duration_months} mo)
+                      <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
+                        Sector Category
+                      </label>
+                      <select
+                        value={farmEditDraft.category}
+                        onChange={(e) => setFarmEditDraft({ ...farmEditDraft, category: e.target.value })}
+                        className="w-full rounded-xl border border-white/10 bg-[#1a231d] px-3 py-2.5 text-sm text-white outline-none focus:border-gold-500"
+                      >
+                        <option value="Cattle Investment">🐄 Cattle Investment</option>
+                        <option value="Pig Farming">🐖 Pig Farming</option>
+                        <option value="Animal Feeds">🌾 Animal Feeds</option>
+                        <option value="Broilers">🐔 Broilers</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Location & Status */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
+                        Location / Region
                       </label>
                       <input
-                        type="number"
-                        min={1}
-                        value={farmEditDraft.duration_months}
-                        onChange={(e) =>
-                          setFarmEditDraft({ ...farmEditDraft, duration_months: Number(e.target.value) })
-                        }
-                        className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-gold-500 font-bold"
+                        type="text"
+                        value={farmEditDraft.location}
+                        onChange={(e) => setFarmEditDraft({ ...farmEditDraft, location: e.target.value })}
+                        className="w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm text-white outline-none focus:border-gold-500"
                       />
                     </div>
 
                     <div>
-                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-stone-400">
-                        Expected ROI (% p.a.)
+                      <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
+                        Status
+                      </label>
+                      <select
+                        value={farmEditDraft.status}
+                        onChange={(e) => setFarmEditDraft({ ...farmEditDraft, status: e.target.value })}
+                        className="w-full rounded-xl border border-white/10 bg-[#1a231d] px-3 py-2.5 text-sm text-white outline-none focus:border-gold-500"
+                      >
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                        <option value="funded">Funded</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Product Image URL & Live Preview */}
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <ImageIcon className="h-4 w-4 text-gold-400" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-gold-400">
+                          Product Image & Visual Preview
+                        </span>
+                      </div>
+                      {farmEditDraft.image_url ? (
+                        <button
+                          type="button"
+                          onClick={() => setFarmEditDraft({ ...farmEditDraft, image_url: '' })}
+                          className="text-[11px] text-stone-400 hover:text-stone-200 transition-colors underline"
+                        >
+                          Reset to Category Art
+                        </button>
+                      ) : null}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
+                      <div className="sm:col-span-2 space-y-2.5">
+                        <div>
+                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
+                            Image URL (Web Link or File Path)
+                          </label>
+                          <div className="relative">
+                            <input
+                              id="edit-farm-image-url"
+                              type="text"
+                              value={farmEditDraft.image_url}
+                              onChange={(e) =>
+                                setFarmEditDraft({ ...farmEditDraft, image_url: e.target.value })
+                              }
+                              placeholder="e.g. https://images.unsplash.com/... or /images/..."
+                              className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2 text-xs text-white placeholder-stone-600 outline-none focus:border-gold-500 font-mono"
+                            />
+                            {farmEditDraft.image_url ? (
+                              <button
+                                type="button"
+                                onClick={() => setFarmEditDraft({ ...farmEditDraft, image_url: '' })}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-white"
+                                title="Clear image URL"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        {/* Photo Presets */}
+                        <div>
+                          <span className="text-[10px] text-stone-400 font-medium block mb-1.5">
+                            Quick preset high-resolution photos:
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setFarmEditDraft({ ...farmEditDraft, image_url: FARM_IMAGES.cattle })
+                              }
+                              className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-medium text-stone-300 hover:bg-white/10 hover:text-white transition-colors"
+                            >
+                              🐄 Cattle
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setFarmEditDraft({ ...farmEditDraft, image_url: FARM_IMAGES.pig })
+                              }
+                              className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-medium text-stone-300 hover:bg-white/10 hover:text-white transition-colors"
+                            >
+                              🐖 Pig
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setFarmEditDraft({ ...farmEditDraft, image_url: FARM_IMAGES.broilers })
+                              }
+                              className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-medium text-stone-300 hover:bg-white/10 hover:text-white transition-colors"
+                            >
+                              🐔 Broilers
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setFarmEditDraft({ ...farmEditDraft, image_url: FARM_IMAGES.feeds })
+                              }
+                              className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-medium text-stone-300 hover:bg-white/10 hover:text-white transition-colors"
+                            >
+                              🌾 Feeds
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setFarmEditDraft({ ...farmEditDraft, image_url: FARM_IMAGES.generalFarm })
+                              }
+                              className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-medium text-stone-300 hover:bg-white/10 hover:text-white transition-colors"
+                            >
+                              🚜 Pasture
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Live Thumbnail Preview */}
+                      <div>
+                        <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
+                          Live Preview
+                        </span>
+                        <div className="relative h-24 w-full overflow-hidden rounded-xl border border-white/15 bg-black/60 shadow-inner">
+                          <FarmImage
+                            src={farmEditDraft.image_url?.trim() || farmArtFor(farmEditDraft.category)}
+                            alt={farmEditDraft.name || 'Product Preview'}
+                            className="h-full w-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
+                          <div className="absolute bottom-1.5 left-2 right-2">
+                            <span className="text-[10px] font-bold text-white truncate block">
+                              {farmEditDraft.name || 'Product'}
+                            </span>
+                            <span className="text-[9px] text-gold-400 block font-medium">
+                              {farmEditDraft.image_url?.trim() ? 'Custom Image' : 'Default Category Art'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Base Financial Parameters */}
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider text-gold-400">
+                        Core Program Parameters
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleRecalculateYields}
+                        className="text-xs text-gold-300 underline hover:text-gold-200"
+                      >
+                        Reset/Sync Yields from ROI %
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                          Min. Investment (UGX)
+                        </label>
+                        <input
+                          type="number"
+                          min={1000}
+                          step={5000}
+                          value={farmEditDraft.min_amount}
+                          onChange={(e) =>
+                            setFarmEditDraft({ ...farmEditDraft, min_amount: e.target.value })
+                          }
+                          className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-gold-500 font-bold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                          Period ({draftDays} Days / {farmEditDraft.duration_months} mo)
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0.01"
+                          value={farmEditDraft.duration_months}
+                          onChange={(e) => handleDurationChange(e.target.value)}
+                          placeholder="e.g. 0.1, 0.3, 0.5"
+                          className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-gold-500 font-bold"
+                        />
+                        <span className="text-[10px] text-stone-400 mt-1 block">
+                          Use decimals (e.g. 0.1=3d, 0.3=9d, 0.5=15d)
+                        </span>
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                          Expected ROI (% p.a.)
+                        </label>
+                        <input
+                          type="number"
+                          step={0.1}
+                          value={farmEditDraft.expected_return_pct}
+                          onChange={(e) =>
+                            setFarmEditDraft({
+                              ...farmEditDraft,
+                              expected_return_pct: e.target.value,
+                            })
+                          }
+                          className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-gold-500 font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Quick Decimal Presets for Short & Standard Terms */}
+                    <div className="pt-2 border-t border-white/10">
+                      <span className="text-[10px] font-medium text-stone-400 block mb-1.5">
+                        Quick Investment Periods (Days / Decimal Months):
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          { label: '3 Days', val: '0.1' },
+                          { label: '5 Days', val: '0.17' },
+                          { label: '9 Days', val: '0.3' },
+                          { label: '10 Days', val: '0.33' },
+                          { label: '12 Days', val: '0.4' },
+                          { label: '15 Days', val: '0.5' },
+                          { label: '30 Days', val: '1' },
+                          { label: '60 Days', val: '2' },
+                          { label: '90 Days', val: '3' },
+                          { label: '180 Days', val: '6' },
+                          { label: '365 Days', val: '12' },
+                        ].map((p) => {
+                          const isSelected = String(farmEditDraft.duration_months) === p.val
+                          return (
+                            <button
+                              key={p.val}
+                              type="button"
+                              onClick={() => handleDurationChange(p.val)}
+                              className={`rounded-lg px-2.5 py-1 text-[10px] font-semibold transition-colors ${
+                                isSelected
+                                  ? 'bg-gold-500 text-forest-950 shadow-xs'
+                                  : 'border border-white/10 bg-white/5 text-stone-300 hover:bg-white/10 hover:text-white'
+                              }`}
+                            >
+                              {p.label} <span className="opacity-70 font-normal">({p.val} mo)</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Direct Returns & Daily Yield Customizer */}
+                  <div className="rounded-2xl border-2 border-emerald-500/30 bg-emerald-950/20 p-4 space-y-3">
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 block">
+                        Custom Daily Return & Total Expected Income
+                      </span>
+                      <p className="text-[11px] text-stone-400">
+                        Directly edit the daily return or total expected income for the minimum investment tier. Changes update investor accruals and marketplace calculations.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                      <div>
+                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                          Daily Return (UGX / Day on Min)
+                        </label>
+                        <input
+                          type="number"
+                          step={0.01}
+                          min={0}
+                          value={farmEditDraft.daily_return}
+                          onChange={(e) => handleDailyReturnChange(Number(e.target.value))}
+                          className="w-full rounded-xl border border-emerald-500/40 bg-black/50 px-3.5 py-2.5 text-base text-emerald-300 font-bold outline-none focus:border-emerald-400"
+                        />
+                        <span className="text-[10px] text-stone-400 mt-1 block">
+                          Equates to ~{Number(farmEditDraft.min_amount) > 0 ? ((Number(farmEditDraft.daily_return) / Number(farmEditDraft.min_amount)) * 100).toFixed(3) : 0}% / day
+                        </span>
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-gold-300">
+                          Total Expected Income (UGX on Min)
+                        </label>
+                        <input
+                          type="number"
+                          step={1}
+                          min={0}
+                          value={farmEditDraft.total_expected_income}
+                          onChange={(e) => handleTotalIncomeChange(Number(e.target.value))}
+                          className="w-full rounded-xl border border-gold-500/40 bg-black/50 px-3.5 py-2.5 text-base text-gold-300 font-bold outline-none focus:border-gold-400"
+                        />
+                        <span className="text-[10px] text-stone-400 mt-1 block">
+                          +{formatUGX(Number(farmEditDraft.total_expected_income) || 0)} total profit over {draftDays} days
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Target Funding & Max Amount */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
+                        Target Funding Goal (UGX)
                       </label>
                       <input
                         type="number"
-                        step={0.1}
-                        value={farmEditDraft.expected_return_pct}
+                        step={1000000}
+                        value={farmEditDraft.target_amount}
+                        onChange={(e) =>
+                          setFarmEditDraft({ ...farmEditDraft, target_amount: e.target.value })
+                        }
+                        className="w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm text-white outline-none focus:border-gold-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
+                        Max Investment Limit (UGX, optional)
+                      </label>
+                      <input
+                        type="number"
+                        step={500000}
+                        value={farmEditDraft.max_amount}
                         onChange={(e) =>
                           setFarmEditDraft({
                             ...farmEditDraft,
-                            expected_return_pct: Number(e.target.value),
+                            max_amount: e.target.value,
                           })
                         }
-                        className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-gold-500 font-bold"
+                        placeholder="Optional max cap"
+                        className="w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm text-white outline-none focus:border-gold-500"
                       />
                     </div>
                   </div>
-                </div>
 
-                {/* Direct Returns & Daily Yield Customizer */}
-                <div className="rounded-2xl border-2 border-emerald-500/30 bg-emerald-950/20 p-4 space-y-3">
-                  <div>
-                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 block">
-                      Custom Daily Return & Total Expected Income
-                    </span>
-                    <p className="text-[11px] text-stone-400">
-                      Directly edit the daily return or total expected income for the minimum investment tier. Changes update investor accruals and marketplace calculations.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                    <div>
-                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-emerald-300">
-                        Daily Return (UGX / Day on Min)
-                      </label>
-                      <input
-                        type="number"
-                        step={0.01}
-                        min={0}
-                        value={farmEditDraft.daily_return}
-                        onChange={(e) => handleDailyReturnChange(Number(e.target.value))}
-                        className="w-full rounded-xl border border-emerald-500/40 bg-black/50 px-3.5 py-2.5 text-base text-emerald-300 font-bold outline-none focus:border-emerald-400"
-                      />
-                      <span className="text-[10px] text-stone-400 mt-1 block">
-                        Equates to ~{farmEditDraft.min_amount > 0 ? ((farmEditDraft.daily_return / farmEditDraft.min_amount) * 100).toFixed(3) : 0}% / day
-                      </span>
-                    </div>
-
-                    <div>
-                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-gold-300">
-                        Total Expected Income (UGX on Min)
-                      </label>
-                      <input
-                        type="number"
-                        step={1}
-                        min={0}
-                        value={farmEditDraft.total_expected_income}
-                        onChange={(e) => handleTotalIncomeChange(Number(e.target.value))}
-                        className="w-full rounded-xl border border-gold-500/40 bg-black/50 px-3.5 py-2.5 text-base text-gold-300 font-bold outline-none focus:border-gold-400"
-                      />
-                      <span className="text-[10px] text-stone-400 mt-1 block">
-                        +{formatUGX(farmEditDraft.total_expected_income)} total profit over {farmEditDraft.duration_months * 30} days
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Target Funding & Max Amount */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Description */}
                   <div>
                     <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
-                      Target Funding Goal (UGX)
+                      Description
                     </label>
-                    <input
-                      type="number"
-                      step={1000000}
-                      value={farmEditDraft.target_amount}
+                    <textarea
+                      rows={2}
+                      value={farmEditDraft.description}
                       onChange={(e) =>
-                        setFarmEditDraft({ ...farmEditDraft, target_amount: Number(e.target.value) })
+                        setFarmEditDraft({ ...farmEditDraft, description: e.target.value })
                       }
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm text-white outline-none focus:border-gold-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
-                      Max Investment Limit (UGX, optional)
-                    </label>
-                    <input
-                      type="number"
-                      step={500000}
-                      value={farmEditDraft.max_amount}
-                      onChange={(e) =>
-                        setFarmEditDraft({
-                          ...farmEditDraft,
-                          max_amount: e.target.value ? Number(e.target.value) : '',
-                        })
-                      }
-                      placeholder="Optional max cap"
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm text-white outline-none focus:border-gold-500"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-sm text-white outline-none focus:border-gold-500"
                     />
                   </div>
                 </div>
 
-                {/* Description & Image */}
-                <div>
-                  <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
-                    Description
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={farmEditDraft.description}
-                    onChange={(e) =>
-                      setFarmEditDraft({ ...farmEditDraft, description: e.target.value })
-                    }
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-sm text-white outline-none focus:border-gold-500"
-                  />
+                <div className="mt-5 flex items-center justify-end gap-3 pt-4 border-t border-white/10 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingFarm(null)
+                      setFarmEditDraft(null)
+                    }}
+                    className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-stone-200 hover:bg-white/10"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={actionBusy}
+                    onClick={saveFarmEdits}
+                    className="rounded-xl bg-gold-500 px-5 py-2.5 text-sm font-bold text-forest-950 hover:bg-gold-400 disabled:opacity-50 transition-colors shadow-lg"
+                  >
+                    {actionBusy ? 'Saving...' : 'Save Program Changes'}
+                  </button>
                 </div>
-              </div>
-
-              <div className="mt-5 flex items-center justify-end gap-3 pt-4 border-t border-white/10 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingFarm(null)
-                    setFarmEditDraft(null)
-                  }}
-                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-stone-200 hover:bg-white/10"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={actionBusy}
-                  onClick={saveFarmEdits}
-                  className="rounded-xl bg-gold-500 px-5 py-2.5 text-sm font-bold text-forest-950 hover:bg-gold-400 disabled:opacity-50 transition-colors shadow-lg"
-                >
-                  {actionBusy ? 'Saving...' : 'Save Program Changes'}
-                </button>
               </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
 
         {/* ================= TAB 5: AUDIT LOGS ================= */}
         {tab === 'transactions' && (

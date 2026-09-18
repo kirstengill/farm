@@ -49,8 +49,8 @@ export default function InvestmentDetailModal({
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
   // Progressive investment-based daily return calculation
-  const durationMonths = project.duration_months || 12
-  const durationDays = durationMonths * 30
+  const durationMonths = Number(project.duration_months) > 0 ? Number(project.duration_months) : 12
+  const durationDays = Math.max(1, Math.round(durationMonths * 30))
   const calcDailyReturn = calculateInvestmentDailyReturn(investAmount)
   const calcTotalReturn = Math.round(calcDailyReturn * durationDays * 100) / 100
   const calcTotalPayout = investAmount + calcTotalReturn
@@ -59,9 +59,7 @@ export default function InvestmentDetailModal({
   const dailyRatePct = investAmount > 0 ? ((calcDailyReturn / investAmount) * 100).toFixed(2) : '0.00'
 
   const startDate = new Date().toISOString()
-  const completionDate = new Date(
-    new Date().setMonth(new Date().getMonth() + durationMonths)
-  ).toISOString()
+  const completionDate = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString()
 
   const availableBalance = wallet?.balance ?? 0
   const hasSufficientFunds = availableBalance >= investAmount

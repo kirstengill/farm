@@ -25,7 +25,8 @@ export default function InvestmentScheduleTimeline({
   compact = false,
   className = '',
 }: TimelineProps) {
-  const durationDays = Math.max(1, durationMonths) * 30
+  const m = Number(durationMonths) > 0 ? Number(durationMonths) : 1
+  const durationDays = Math.max(1, Math.round(m * 30))
   const calcDailyReturn = dailyReturn ?? calculateInvestmentDailyReturn(amount)
   const calcTotalReturn =
     totalReturn ?? Math.round(calcDailyReturn * durationDays * 100) / 100
@@ -33,9 +34,9 @@ export default function InvestmentScheduleTimeline({
   const sDate = startDate ? new Date(startDate) : new Date()
   const cDate = completionDate
     ? new Date(completionDate)
-    : new Date(new Date().setMonth(new Date().getMonth() + durationMonths))
+    : new Date(sDate.getTime() + durationDays * 24 * 60 * 60 * 1000)
 
-  const dailyRatePct = durationMonths > 0 ? (returnPct / (durationMonths * 30)).toFixed(2) : '0.00'
+  const dailyRatePct = durationDays > 0 ? (returnPct / durationDays).toFixed(2) : '0.00'
 
   if (compact) {
     return (

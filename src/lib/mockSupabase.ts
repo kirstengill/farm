@@ -1545,8 +1545,9 @@ export const mockSupabase = {
       const invId = `inv-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
       // Calculate progressive daily return based on invested amount
       const dailyReturn = calculateInvestmentDailyReturn(p_amount)
-      const durationMonths = farm.duration_months || 12
-      const expReturn = Math.round(dailyReturn * durationMonths * 30 * 100) / 100
+      const durationMonths = Number(farm.duration_months) > 0 ? Number(farm.duration_months) : 12
+      const durationDays = Math.max(1, Math.round(durationMonths * 30))
+      const expReturn = Math.round(dailyReturn * durationDays * 100) / 100
 
       wallet.balance -= p_amount
       wallet.total_invested += p_amount
@@ -1563,7 +1564,7 @@ export const mockSupabase = {
       const lockDays = lockEnabled ? Math.max(0, Number(lockSetting?.value ?? 7)) : 0
 
       const startDateIso = new Date().toISOString()
-      const maturityDateIso = new Date(Date.now() + durationMonths * 30 * 24 * 3600 * 1000).toISOString()
+      const maturityDateIso = new Date(Date.now() + durationDays * 24 * 3600 * 1000).toISOString()
 
       // Initial day 1 accrual
       const initialAccrual = computeInvestmentAccrual({
